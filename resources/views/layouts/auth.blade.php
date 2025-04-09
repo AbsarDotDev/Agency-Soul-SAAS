@@ -50,6 +50,11 @@
     <title>
         {{ Utility::getValByName('title_text') ? Utility::getValByName('title_text') : config('app.name', 'Agency soul') }}
         - @yield('page-title')</title>
+        <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <!-- Script blocker - load this first -->
+    <script src="{{ asset('js/script-blocker.js') }}"></script>
 
     <meta name="title" content="{{ $metatitle }}">
     <meta name="description" content="{{ $metsdesc }}">
