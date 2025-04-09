@@ -587,7 +587,7 @@
                                 </div>
                                 <div class="form-group col-md-3">
                                     {{ Form::label('title_text', __('Title Text'), ['class' => 'form-label']) }}
-                                    {{ Form::text('title_text', Utility::getValByName('title_text') ? Utility::getValByName('title_text') : 'ErpGo Saas', ['class' => 'form-control', 'placeholder' => __('Title Text')]) }}
+                                    {{ Form::text('title_text', Utility::getValByName('title_text') ? Utility::getValByName('title_text') : 'AgencySoul SaaS', ['class' => 'form-control', 'placeholder' => __('Title Text')]) }}
                                     @error('title_text')
                                         <span class="invalid-title_text" role="alert">
                                             <strong class="text-danger">{{ $message }}</strong>
