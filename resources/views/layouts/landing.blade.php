@@ -25,7 +25,7 @@
 <html lang="en" dir="{{$setting['SITE_RTL'] == 'on'?'rtl':''}}">
 <head>
 
-    <title>{{__('ERPGo SaaS')}}</title>
+    <title>{{__('AgencySoul SaaS')}}</title>
     <meta name="title" content="{{$metatitle}}">
     <meta name="description" content="{{$metsdesc}}">
 
@@ -147,7 +147,7 @@
                     class="text-white mb-sm-4 wow animate__fadeInLeft"
                     data-wow-delay="0.2s"
                 >
-                    {{__('ERPGo SaaS')}}
+                    {{__('AgencySoul SaaS')}}
                 </h1>
                 <h2
                     class="text-white mb-sm-4 wow animate__fadeInLeft"
@@ -276,7 +276,7 @@
                     class="mb-sm-4 f-w-600 wow animate__fadeInLeft"
                     data-wow-delay="0.2s"
                 >
-                    {{__('ERPGo SaaS')}}
+                    {{__('AgencySoul SaaS')}}
                 </h1>
                 <h2 class="mb-sm-4 wow animate__fadeInLeft" data-wow-delay="0.4s">
                     {{__(' All In One Business ERP With Project, Account, HRM, CRM')}}
@@ -314,7 +314,7 @@
                     class="mb-sm-4 f-w-600 wow animate__fadeInRight"
                     data-wow-delay="0.2s"
                 >
-                    {{__('ERPGo SaaS')}}
+                    {{__('AgencySoul SaaS')}}
                 </h1>
                 <h2 class="mb-sm-4 wow animate__fadeInRight" data-wow-delay="0.4s">
                     {{__('All In One Business ERP With Project, Account, HRM, CRM')}}
@@ -460,7 +460,7 @@
                     class="mb-sm-4 f-w-600 wow animate__fadeInLeft"
                     data-wow-delay="0.2s"
                 >
-                    {{__('ERPGo SaaS')}}
+                    {{__('AgencySoul SaaS')}}
                 </h1>
                 <h2 class="mb-sm-4 wow animate__fadeInLeft" data-wow-delay="0.4s">
                     {{__('All In One Business ERP With Project, Account, HRM, CRM')}}
@@ -498,7 +498,7 @@
                     class="mb-sm-4 f-w-600 wow animate__fadeInRight"
                     data-wow-delay="0.2s"
                 >
-                    {{__('ERPGo SaaS')}}
+                    {{__('AgencySoul SaaS')}}
                 </h1>
                 <h2 class="mb-sm-4 wow animate__fadeInRight" data-wow-delay="0.4s">
                     {{__('All In One Business ERP With Project, Account, HRM, CRM')}}
@@ -846,7 +846,7 @@
                     class="mb-sm-4 f-w-600 wow animate__fadeInLeft"
                     data-wow-delay="0.2s"
                 >
-                    {{__('ERPGo SaaS')}}
+                    {{__('AgencySoul SaaS')}}
                 </h1>
                 <h2 class="mb-sm-4 wow animate__fadeInLeft" data-wow-delay="0.4s">
                     {{__('All In One Business ERP With Project, Account, HRM, CRM')}}
@@ -950,7 +950,7 @@
             </div>
             <div class="col-lg-6 col-sm-12 text-end">
 
-                <p class="text-body">Copyright © 2023 | Design By ERPGo</p>
+                <p class="text-body">Copyright © 2023 | Design By AgencySoul</p>
             </div>
         </div>
     </div>
