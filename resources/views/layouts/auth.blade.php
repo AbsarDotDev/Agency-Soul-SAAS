@@ -164,7 +164,7 @@
                         </button>
                         <div class="collapse navbar-collapse" id="navbarlogin">
                             <ul class="navbar-nav align-items-center ms-auto mb-2 mb-lg-0">
-                                @include('landingpage::layouts.buttons')
+                                <!-- @include('landingpage::layouts.buttons') -->
                                 @yield('language-bar')
                             </ul>
                         </div>
