@@ -410,10 +410,10 @@
                                 class="list-group-item list-group-item-action border-0">{{ __('Email Settings') }}
                                 <div class="float-end"><i class="ti ti-chevron-right"></i></div>
                             </a>
-                            <a href="#tracker-settings"
+                            <!-- <a href="#tracker-settings"
                                 class="list-group-item list-group-item-action border-0">{{ __('Time Tracker Settings') }}
                                 <div class="float-end"><i class="ti ti-chevron-right"></i></div>
-                            </a>
+                            </a> -->
                             <a href="#payment-settings"
                                 class="list-group-item list-group-item-action border-0">{{ __('Payment Settings') }}
                                 <div class="float-end"><i class="ti ti-chevron-right"></i></div>
@@ -1424,7 +1424,7 @@
                     </div>
 
                     <!--Time-Tracker Settings-->
-                    <div id="tracker-settings" class="card">
+                    <!-- <div id="tracker-settings" class="card">
                         <div class="card-header">
                             <h5>{{ __('Time Tracker Settings') }}</h5>
                             <small class="text-muted">{{ __('Edit your Time Tracker settings') }}</small>
@@ -1451,7 +1451,7 @@
                             </div>
                         </div>
                         {{ Form::close() }}
-                    </div>
+                    </div> -->
 
                     <!--Payment Settings-->
                     <div class="card" id="payment-settings">
@@ -1672,7 +1672,7 @@
                                                     </div>
 
                                                     <!-- Paystack -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingThree">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapseThree"
@@ -1730,10 +1730,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Flutterwave -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingFour">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapseFour"
@@ -1791,10 +1791,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Razorpay -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingFive">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapseFive"
@@ -1853,10 +1853,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Paytm -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingSix">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapseSix"
@@ -1983,10 +1983,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Mercado Pago -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingseven">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse"
@@ -2074,10 +2074,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Mollie -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingeight">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse"
@@ -2150,7 +2150,7 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Skrill -->
                                                     <div class="accordion-item">
@@ -2206,7 +2206,7 @@
                                                     </div>
 
                                                     <!-- CoinGate -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingten">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapseten"
@@ -2287,10 +2287,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- PaymentWall -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingeleven">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse"
@@ -2350,10 +2350,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Toyyibpay -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingtwelve">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse"
@@ -2412,10 +2412,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Payfast -->
-                                                    <div class="accordion accordion-flush setting-accordion"
+                                                    <!-- <div class="accordion accordion-flush setting-accordion"
                                                         id="accordionExample">
                                                         <div class="accordion-item">
                                                             <h2 class="accordion-header" id="headingOne">
@@ -2524,10 +2524,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Iyzipay -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingFourteen">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse"
@@ -2623,10 +2623,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- SSPAY -->
-                                                    <div class="accordion accordion-flush setting-accordion"
+                                                    <!-- <div class="accordion accordion-flush setting-accordion"
                                                         id="accordionExample">
                                                         <div class="accordion-item">
                                                             <h2 class="accordion-header" id="headingFourteen">
@@ -2689,10 +2689,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Paytab -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwenty">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse"
@@ -2775,10 +2775,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!--Benefit----->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwentyOne">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse"
@@ -2838,10 +2838,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!--Cashfree----->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwentyTwo">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse"
@@ -2900,10 +2900,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!--Aamarpay----->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwenty-One">
                                                             <button class="accordion-button" type="button"
                                                                 data-bs-toggle="collapse"
@@ -2999,10 +2999,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!--PayTR----->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwenty-Two">
                                                             <button class="accordion-button" type="button"
                                                                 data-bs-toggle="collapse"
@@ -3067,10 +3067,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!--Yookassa----->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwenty-Three">
                                                             <button class="accordion-button" type="button"
                                                                 data-bs-toggle="collapse"
@@ -3124,10 +3124,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!--Midtrans----->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwenty-four">
                                                             <button class="accordion-button" type="button"
                                                                 data-bs-toggle="collapse"
@@ -3209,10 +3209,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!--Xendit----->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwenty-five">
                                                             <button class="accordion-button" type="button"
                                                                 data-bs-toggle="collapse"
@@ -3268,10 +3268,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!--Nepalste----->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwenty-six">
                                                             <button class="accordion-button" type="button"
                                                                 data-bs-toggle="collapse"
@@ -3353,10 +3353,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                      <!--Paiement Pro----->
-                                                     <div class="accordion-item">
+                                                     <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwenty-seven">
                                                             <button class="accordion-button" type="button"
                                                                 data-bs-toggle="collapse"
@@ -3399,10 +3399,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                      <!--Cinetpay----->
-                                                     <div class="accordion-item">
+                                                     <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwenty-eight">
                                                             <button class="accordion-button" type="button"
                                                                 data-bs-toggle="collapse"
@@ -3456,10 +3456,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                      <!--Fedapay----->
-                                                     <div class="accordion-item">
+                                                     <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwenty-nine">
                                                             <button class="accordion-button" type="button"
                                                                 data-bs-toggle="collapse"
@@ -3540,9 +3540,9 @@
                                                            </div>
                                                        </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
-                                                    {{-- PayHere --}}
+                                                    <!-- {{-- PayHere --}}
                                                     <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingThirty">
                                                             <button class="accordion-button" type="button"
@@ -3650,9 +3650,9 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
-                                                     {{-- Tap --}}
+                                                     <!-- {{-- Tap --}}
                                                      <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingThirty-one">
                                                             <button class="accordion-button" type="button"
@@ -3698,9 +3698,9 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
-                                                     {{-- AuthorizeNet --}}
+                                                     <!-- {{-- AuthorizeNet --}}
                                                      <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingThirty-two">
                                                             <button class="accordion-button" type="button"
@@ -3790,9 +3790,9 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
-                                                      {{-- Khalti --}}
+                                                      <!-- {{-- Khalti --}}
                                                     <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingThirty-three">
                                                             <button class="accordion-button" type="button"
@@ -3849,9 +3849,9 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
-                                                     {{-- Easebuzz --}}
+                                                     <!-- {{-- Easebuzz --}}
                                                      <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingThirty-four">
                                                             <button class="accordion-button" type="button"
@@ -3918,9 +3918,9 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
-                                                    {{-- Ozow --}}
+                                                    <!-- {{-- Ozow --}}
                                                     <div class="accordion-item">
                                                         <h2 class="accordion-header" id="ozow-payment">
                                                             <button class="accordion-button" type="button"
@@ -4025,7 +4025,7 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </div> -->
                         <div class="card-footer text-end">
                             <div class="form-group mb-0">
                                 <input class="btn btn-print-invoice  btn-primary" type="submit"
