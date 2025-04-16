@@ -114,7 +114,7 @@
                                         </p>
                                         @if ($purchase->status != 0)
                                             @can('create payment purchase')
-                                                <a href="#" data-url="{{ route('purchase.payment', $purchase->id) }}"
+                                                <a href="#" data-url="{{ route('purchase.payments', $purchase->id) }}"
                                                     data-ajax-popup="true" data-title="{{ __('Add Payment') }}"
                                                     class="btn btn-sm d-inline-flex align-items-center gap-2" data-original-title="{{ __('Add Payment') }}"><i
                                                         class="ti ti-report-money mr-2"></i>{{ __('Add Payment') }}</a> 
