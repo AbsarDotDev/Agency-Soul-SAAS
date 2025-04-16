@@ -2456,7 +2456,7 @@
   "Please set stripe api key & secret key for add new plan.": "新しいプランを追加するために、Stripe APIキーとシークレットキーを設定してください。",
   "Please set stripe or paypal api key & secret key for add new plan.": "新しいプランを追加するために、StripeまたはPayPal APIキーとシークレットキーを設定してください。",
   "Please upload a valid image file. Size of image should not be more than 2MB.": "有効な画像ファイルをアップロードしてください。",
-  "Please use with country code. (ex. +91)": "カントリーコードで使用してください。 ",
+  "Please use with country code. (ex. +92)": "カントリーコードで使用してください。 ",
   "Please write checklist name!": "チェックリスト名を書いてください！",
   "Please write comment!": "コメントを書いてください！",
   "Please write todo title!": "TODOタイトルを書いてください！",
