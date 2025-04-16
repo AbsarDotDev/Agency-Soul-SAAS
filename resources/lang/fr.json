@@ -2456,7 +2456,7 @@
   "Please set stripe api key & secret key for add new plan.": "Veuillez définir la clé API Stripe et la clé secrète pour ajouter un nouveau plan.",
   "Please set stripe or paypal api key & secret key for add new plan.": "Veuillez définir Stripe ou PayPal API Key & Secret Key pour ajouter un nouveau plan.",
   "Please upload a valid image file. Size of image should not be more than 2MB.": "Veuillez télécharger un fichier image valide. ",
-  "Please use with country code. (ex. +91)": "Veuillez utiliser avec le code du pays. ",
+  "Please use with country code. (ex. +92)": "Veuillez utiliser avec le code du pays. ",
   "Please write checklist name!": "Veuillez écrire le nom de la liste de contrôle!",
   "Please write comment!": "Veuillez écrire du commentaire!",
   "Please write todo title!": "Veuillez écrire le titre TODO!",

@@ -46,7 +46,7 @@ class DepartmentController extends Controller
             $validator = \Validator::make(
                 $request->all(), [
                                    'branch_id' => 'required',
-                                   'name' => 'required|max:20',
+                                   'name' => 'required|max:30',
                                ]
             );
             if($validator->fails())
@@ -105,7 +105,7 @@ class DepartmentController extends Controller
                 $validator = \Validator::make(
                     $request->all(), [
                                        'branch_id' => 'required',
-                                       'name' => 'required|max:20',
+                                       'name' => 'required|max:30',
                                    ]
                 );
                 if($validator->fails())

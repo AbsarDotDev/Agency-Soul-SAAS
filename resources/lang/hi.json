@@ -2456,7 +2456,7 @@
   "Please set stripe api key & secret key for add new plan.": "कृपया नई योजना जोड़ने के लिए स्ट्राइप एपीआई कुंजी और गुप्त कुंजी सेट करें।",
   "Please set stripe or paypal api key & secret key for add new plan.": "कृपया नई योजना जोड़ने के लिए स्ट्राइप या पेपैल एपीआई कुंजी और गुप्त कुंजी सेट करें।",
   "Please upload a valid image file. Size of image should not be more than 2MB.": "कृपया एक मान्य छवि फ़ाइल अपलोड करें। ",
-  "Please use with country code. (ex. +91)": "कृपया देश कोड के साथ उपयोग करें। ",
+  "Please use with country code. (ex. +92)": "कृपया देश कोड के साथ उपयोग करें। ",
   "Please write checklist name!": "कृपया चेकलिस्ट नाम लिखें!",
   "Please write comment!": "कृपया टिप्पणी लिखें!",
   "Please write todo title!": "कृपया TODO शीर्षक लिखें!",
