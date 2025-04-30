@@ -157,6 +157,7 @@ use App\Http\Controllers\PayHereController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\ReferralProgramController;
 use App\Http\Controllers\TapController;
+use App\Http\Controllers\AiAgentController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
 
@@ -1783,3 +1784,12 @@ Route::group(['middleware' => ['verified']], function () {
 
 Route::any('/cookie-consent', [SystemController::class, 'CookieConsent'])->name('cookie-consent');
 Route::get('payslip/payslipPdf/{id}/{month}', [PaySlipController::class, 'payslipPdf'])->name('payslip.payslipPdf')->middleware(['XSS']);
+
+// AI Agent Route
+Route::middleware(['auth','XSS'])->group(function () {
+    Route::get('/ai-agent', [AiAgentController::class, 'showChat'])->name('ai_agent.chat');
+    // Add routes for API interactions later
+    Route::post('/ai-agent/process', [AiAgentController::class, 'processMessage'])->name('ai_agent.process');
+    // Route::post('/ai-agent/visualize', [AiAgentController::class, 'generateVisualization'])->name('ai_agent.visualize');
+    // Route::post('/ai-agent/action', [AiAgentController::class, 'performAction'])->name('ai_agent.action');
+});
