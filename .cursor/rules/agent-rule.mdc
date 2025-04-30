@@ -4,7 +4,7 @@ globs:
 alwaysApply: true
 ---
 ### 📚 Documentation Lookup Strategy (For AI Assistant)
-- **Always use the context7 MCP server** to reference documentation for libraries like Pydantic.
+- **Always use the context7 MCP server** to reference documentation for libraries like Pydanti, langgraph, crewai, langchain etc
 - For the tokens, start with 5000 but then increase to 20000 if your first search didn't give relevant documentation.
 - Only search three times maximum for any specific piece of documentation. If you don't get what you need, use the Web tool to perform a wider search.
 
