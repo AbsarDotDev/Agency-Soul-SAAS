@@ -248,116 +248,100 @@ def _add_company_filters(sql_query: str, tables: List[Tuple[str, str]], company_
     """
     # Check if this query already has a WHERE clause
     has_where = re.search(r"\bWHERE\b", sql_query, re.IGNORECASE) is not None
+    # Check if this query already has a GROUP BY clause
+    has_group_by = re.search(r"\bGROUP\s+BY\b", sql_query, re.IGNORECASE) is not None
+    # Check if this query already has a ORDER BY clause
+    has_order_by = re.search(r"\bORDER\s+BY\b", sql_query, re.IGNORECASE) is not None
+    # Check if this query already has a LIMIT clause
+    has_limit = re.search(r"\bLIMIT\b", sql_query, re.IGNORECASE) is not None
+
+    where_conditions = []
     
-    # Build the company filters
-    company_filters = []
+    # Iterate over tables found in the query
     for table, alias in tables:
-        if table.lower() in COMPANY_ISOLATION_MAPPING:
-            col = COMPANY_ISOLATION_MAPPING[table.lower()]["column"]
-            company_filters.append(f"{alias}.{col} = {company_id}")
+        table_lower = table.lower()
+        if table_lower in COMPANY_ISOLATION_MAPPING:
+            isolation_col = COMPANY_ISOLATION_MAPPING[table_lower]["column"]
+            # Use alias if available, otherwise table name
+            table_ref = alias if alias != table else table
+            where_conditions.append(f"{table_ref}.{isolation_col} = {company_id}")
     
-    if not company_filters:
-        # If no applicable tables found for filtering, return with a warning comment
+    # Combine conditions with AND
+    if not where_conditions:
+        # No isolatable tables found, return original query with comment
         return _add_company_id_comment(sql_query, company_id)
     
-    # Join the company filters with AND
-    company_filter_str = " AND ".join(company_filters)
-    
-    # Add the company filter to the query
+    company_filter = " AND ".join(where_conditions)
+
+    # Find the position to insert the WHERE/AND clause
+    insert_pos = len(sql_query)
+    if has_limit:
+        insert_pos = min(insert_pos, re.search(r"\bLIMIT\b", sql_query, re.IGNORECASE).start())
+    if has_order_by:
+        insert_pos = min(insert_pos, re.search(r"\bORDER\s+BY\b", sql_query, re.IGNORECASE).start())
+    if has_group_by:
+        insert_pos = min(insert_pos, re.search(r"\bGROUP\s+BY\b", sql_query, re.IGNORECASE).start())
     if has_where:
-        # Add to existing WHERE clause
-        modified_query = re.sub(
-            r"WHERE",
-            f"WHERE ({company_filter_str}) AND ",
-            sql_query, 
-            flags=re.IGNORECASE,
-            count=1
-        )
+        insert_pos = min(insert_pos, re.search(r"\bWHERE\b", sql_query, re.IGNORECASE).end())
+    
+    # Build the modified query
+    if has_where:
+        # Insert conditions after existing WHERE clause
+        modified_query = sql_query[:insert_pos] + f" AND {company_filter} " + sql_query[insert_pos:]
     else:
-        # Check if there's a GROUP BY, ORDER BY, or LIMIT clause
-        order_by_match = re.search(r"\bORDER\s+BY\b", sql_query, re.IGNORECASE)
-        group_by_match = re.search(r"\bGROUP\s+BY\b", sql_query, re.IGNORECASE)
-        limit_match = re.search(r"\bLIMIT\b", sql_query, re.IGNORECASE)
+        # Insert new WHERE clause before GROUP BY/ORDER BY/LIMIT
+        modified_query = sql_query[:insert_pos] + f" WHERE {company_filter} " + sql_query[insert_pos:]
         
-        # Find the position to insert the WHERE clause
-        if group_by_match:
-            position = group_by_match.start()
-            modified_query = f"{sql_query[:position]} WHERE {company_filter_str} {sql_query[position:]}"
-        elif order_by_match:
-            position = order_by_match.start()
-            modified_query = f"{sql_query[:position]} WHERE {company_filter_str} {sql_query[position:]}"
-        elif limit_match:
-            position = limit_match.start()
-            modified_query = f"{sql_query[:position]} WHERE {company_filter_str} {sql_query[position:]}"
-        else:
-            # Add at the end of the query
-            modified_query = f"{sql_query} WHERE {company_filter_str}"
-    
-    # Add a comment to indicate company isolation was applied
-    modified_query = f"""
-    /* Company ID: {company_id} */
-    /* Company isolation applied automatically */
-    {modified_query}
-    """
-    
-    return modified_query
+    return f"/* Company ID: {company_id} */\n{modified_query}"
 
 class CompanyIsolationSQLDatabase(SQLDatabase):
-    """Extended SQLDatabase with company isolation built in."""
-    
+    """ Custom SQLDatabase class to automatically apply company isolation."""
     def __init__(self, company_id: int, **kwargs):
-        """Initialize with company ID for data isolation.
-        
-        Args:
-            company_id: Company ID for data isolation
-            **kwargs: Additional arguments for SQLDatabase
-        """
-        super().__init__(**kwargs)
         self.company_id = company_id
-    
-    def run(self, command: str, fetch: str = "all") -> Any:
-        """Run a SQL command with company isolation applied.
-        
-        Args:
-            command: SQL command to run
-            fetch: Fetch strategy ('all', 'one', 'many', etc.)
-            
-        Returns:
-            Query result
-        """
-        # Apply company isolation to the command
-        scoped_command = get_company_scoped_query(command, self.company_id)
-        logger.info(f"Running company-isolated query: {scoped_command}")
-        
-        # Use the parent class's run method with the scoped command
-        return super().run(scoped_command, fetch)
+        # Filter out unsupported arguments before calling super
+        supported_args = ['engine', 'schema', 'metadata', 'ignore_tables', 'include_tables', 
+                          'sample_rows_in_table_info', 'indexes_in_table_info', 
+                          'custom_table_info', 'view_support', 'max_string_length']
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in supported_args}
+        super().__init__(**filtered_kwargs)
+
+    def run(self, command: str, fetch: str = "all", **kwargs) -> Any:
+        """ Execute SQL query after applying company isolation."""
+        modified_command = get_company_scoped_query(command, self.company_id)
+        logger.debug(f"Executing modified SQL: {modified_command}")
+        # Execute the command using the parent class method
+        try:
+            # Pass through any extra kwargs received (like 'parameters')
+            return super().run(modified_command, fetch=fetch, **kwargs) 
+        except Exception as e:
+            # Log the modified command along with the error
+            logger.error(f"Error running modified SQL query: {modified_command}\nError: {e}")
+            # Re-raise the exception to be handled by the agent
+            raise
 
 def get_company_isolated_sql_database(company_id: int, **kwargs) -> SQLDatabase:
-    """Create a SQLDatabase instance with company isolation.
-    
-    Args:
-        company_id: Company ID for data isolation
-        **kwargs: Additional arguments for SQLDatabase
+    """ Get a company-isolated SQLDatabase instance."""
+    try:
+        engine = DatabaseConnection.create_engine()
         
-    Returns:
-        SQLDatabase instance with company isolation
-    """
-    # Create base SQLDatabase instance
-    engine = DatabaseConnection.create_engine()
-    
-    # Default tables to exclude (system tables, etc.)
-    default_exclude = ["failed_jobs", "migrations", "password_resets", "personal_access_tokens"]
-    
-    exclude_tables = kwargs.pop("exclude_tables", None)
-    if exclude_tables:
-        exclude_tables = list(set(exclude_tables + default_exclude))
-    else:
-        exclude_tables = default_exclude
-    
-    # Create company-isolated instance
-    return CompanyIsolationSQLDatabase(
-        company_id=company_id,
-        engine=engine,
-        exclude_tables=exclude_tables,
-        **kwargs
-    )
+        # Default tables to exclude (system tables, etc.)
+        default_exclude = ["failed_jobs", "migrations", "password_resets", "personal_access_tokens"]
+        
+        # Combine provided exclude_tables with defaults
+        exclude_tables = list(set((kwargs.get('exclude_tables', []) or []) + default_exclude))
+        kwargs['exclude_tables'] = exclude_tables # Update kwargs
+        
+        # Remove exclude_tables from kwargs before passing to CompanyIsolationSQLDatabase
+        # as it doesn't directly support it in its __init__ signature
+        if 'exclude_tables' in kwargs:
+             del kwargs['exclude_tables'] # This was likely causing the error
+
+        return CompanyIsolationSQLDatabase(
+            engine=engine,
+            company_id=company_id,
+            # Pass other supported kwargs like include_tables, sample_rows_in_table_info
+            **kwargs
+        )
+    except Exception as e:
+        logger.error(f"Failed to create CompanyIsolatedSQLDatabase: {str(e)}")
+        raise
