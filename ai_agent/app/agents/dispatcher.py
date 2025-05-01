@@ -209,7 +209,7 @@ class AgentDispatcher:
             Agent type (hrm, sales, etc.)
         """
         # Initialize LLM for routing
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", google_api_key=settings.GOOGLE_API_KEY)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=settings.GOOGLE_API_KEY)
         
         # System prompt for agent type detection
         system_prompt = """You are a routing agent for AgenySoul, an ERP/CRM/HRM system.

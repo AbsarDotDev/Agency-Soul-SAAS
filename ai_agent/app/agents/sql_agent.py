@@ -12,6 +12,7 @@ from langchain.output_parsers.openai_tools import PydanticToolsParser
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.agents.base_agent import BaseAgent, AgentResponse, VisualizationResult
 from app.database.connection import get_company_isolated_sql_database, COMPANY_ISOLATION_MAPPING
@@ -55,32 +56,33 @@ class SQLAgent(BaseAgent):
             conversation_id = str(uuid.uuid4())
         
         try:
-            # Verify token usage and AI agent enabled status
+            # Verify token usage
             if session:
-                company = session.execute("""
-                    SELECT ai_agent_enabled, ai_agent_tokens_allocated, ai_agent_tokens_used
-                    FROM users
-                    WHERE id = :company_id
-                """, {
+                # Fetch user's token usage and plan's token allocation
+                result = session.execute(text("""
+                    SELECT u.ai_agent_tokens_used, p.ai_agent_default_tokens
+                    FROM users u
+                    JOIN plans p ON u.plan = p.id
+                    WHERE u.id = :company_id AND p.ai_agent_enabled = 1
+                """), {
                     "company_id": company_id
                 }).fetchone()
                 
-                if not company:
+                if not result:
+                     # This could mean user not found, plan not found, or plan does not have AI enabled
+                    logger.warning(f"Could not retrieve token/plan info for company_id: {company_id}. User or valid AI plan might not exist.")
                     return AgentResponse(
-                        message="Company not found. Please contact support.",
+                        message="Could not verify AI Agent access or plan status. Please contact support.",
                         conversation_id=conversation_id
                     )
                 
-                if not company[0]:  # ai_agent_enabled
-                    return AgentResponse(
-                        message="AI agent is not enabled for your account. Please upgrade your plan.",
-                        conversation_id=conversation_id
-                    )
+                tokens_used, tokens_allocated = result
+                tokens_remaining = tokens_allocated - tokens_used
                 
-                tokens_remaining = company[1] - company[2]  # ai_agent_tokens_allocated - ai_agent_tokens_used
                 if tokens_remaining <= 0:
+                    logger.info(f"Company {company_id} has no remaining AI tokens.")
                     return AgentResponse(
-                        message="You have used all your AI agent tokens. Please upgrade your plan or contact support.",
+                        message="You have used all your AI Agent tokens. Please contact your administrator.",
                         conversation_id=conversation_id
                     )
             
@@ -152,13 +154,16 @@ but you should still be aware of this restriction when writing your queries.
             response_text = result["output"]
             
             # Update token usage (placeholder for actual token counting)
-            tokens_used = 1  # This would be calculated based on actual token usage
+            tokens_to_consume = 1  # This would be calculated based on actual token usage
             if session:
-                await self._update_token_usage(
+                update_success = await self._update_token_usage(
                     session=session,
                     company_id=company_id,
-                    tokens_used=tokens_used
+                    tokens_used=tokens_to_consume # Use a different name
                 )
+                if not update_success:
+                     logger.error(f"Failed to update token usage for company {company_id}")
+                     # Decide how to handle this - maybe still save convo but log error?
                 
                 # Save conversation
                 await self._save_conversation(
@@ -169,13 +174,24 @@ but you should still be aware of this restriction when writing your queries.
                     message=message,
                     response=response_text,
                     agent_type="SQL",
-                    tokens_used=tokens_used
+                    tokens_used=tokens_to_consume
                 )
             
-            return AgentResponse(
+            # Return response including remaining tokens
+            # We fetch the latest count AFTER decrementing
+            final_tokens_remaining = await self._get_remaining_tokens(session, company_id)
+            
+            response_payload = AgentResponse(
                 message=response_text,
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                tokens_remaining=final_tokens_remaining,
+                tokens_used=tokens_to_consume
             )
+            
+            # Log the payload just before returning
+            logger.info(f"Returning payload to API: {response_payload.model_dump()}")
+            
+            return response_payload
             
         except Exception as e:
             logger.error(f"Error in SQL agent: {str(e)}")
@@ -205,7 +221,7 @@ but you should still be aware of this restriction when writing your queries.
             # Get table schema information
             table_info = []
             for table_name in tables_with_isolation:
-                columns = db.get_table_info(table_name=table_name)
+                columns = db.get_table_info(table_names=[table_name])
                 # Format the table information with indentation for better readability
                 formatted_columns = "  - " + "\n  - ".join(
                     [col.strip() for col in columns.split(",")]
@@ -238,33 +254,34 @@ but you should still be aware of this restriction when writing your queries.
             Visualization result
         """
         try:
-            # Verify token usage and AI agent enabled status
+            # Verify token usage
             if session:
-                company = session.execute("""
-                    SELECT ai_agent_enabled, ai_agent_tokens_allocated, ai_agent_tokens_used
-                    FROM users
-                    WHERE id = :company_id
-                """, {
+                result = session.execute(text("""
+                    SELECT u.ai_agent_tokens_used, p.ai_agent_default_tokens
+                    FROM users u
+                    JOIN plans p ON u.plan = p.id
+                    WHERE u.id = :company_id AND p.ai_agent_enabled = 1
+                """), {
                     "company_id": company_id
                 }).fetchone()
                 
-                if not company:
+                if not result:
+                    logger.warning(f"Could not retrieve token/plan info for company_id: {company_id} for visualization.")
                     return VisualizationResult(
                         data=None,
-                        explanation="Company not found. Please contact support."
+                        explanation="Could not verify AI Agent access or plan status."
                     )
                 
-                if not company[0]:  # ai_agent_enabled
+                tokens_used, tokens_allocated = result
+                tokens_remaining = tokens_allocated - tokens_used
+
+                # Check specifically for visualization token cost
+                visualization_token_cost = 2 # Assume higher cost
+                if tokens_remaining < visualization_token_cost:
+                    logger.info(f"Company {company_id} has insufficient tokens ({tokens_remaining}) for visualization (cost: {visualization_token_cost}).")
                     return VisualizationResult(
                         data=None,
-                        explanation="AI agent is not enabled for your account. Please upgrade your plan."
-                    )
-                
-                tokens_remaining = company[1] - company[2]  # ai_agent_tokens_allocated - ai_agent_tokens_used
-                if tokens_remaining <= 0:
-                    return VisualizationResult(
-                        data=None,
-                        explanation="You have used all your AI agent tokens. Please upgrade your plan or contact support."
+                        explanation=f"You need at least {visualization_token_cost} tokens for visualization, but only have {tokens_remaining} left."
                     )
             
             # Create company-isolated SQLDatabase instance
@@ -354,15 +371,21 @@ Write ONLY the SQL query, nothing else.
                 llm=llm
             )
             
-            # Update token usage (placeholder for actual token counting)
-            tokens_used = 2  # Visualizations use more tokens
+            # Update token usage
+            tokens_to_consume = visualization_token_cost 
             if session:
-                await self._update_token_usage(
+                 update_success = await self._update_token_usage(
                     session=session,
                     company_id=company_id,
-                    tokens_used=tokens_used
-                )
-            
+                    tokens_used=tokens_to_consume
+                 )
+                 if not update_success:
+                     logger.error(f"Failed to update token usage for visualization for company {company_id}")
+
+            # Return visualization result including remaining tokens
+            final_tokens_remaining = await self._get_remaining_tokens(session, company_id)
+            visualization.tokens_remaining = final_tokens_remaining # Assuming VisualizationResult has this field
+
             return visualization
             
         except Exception as e:
@@ -390,23 +413,23 @@ Write ONLY the SQL query, nothing else.
         """
         try:
             # First check if the table exists
-            table_exists = session.execute("""
+            table_exists = session.execute(text("""
                 SELECT COUNT(*) 
                 FROM information_schema.tables 
                 WHERE table_name = 'agent_conversations'
-            """).scalar() > 0
+            """)).scalar() > 0
             
             if not table_exists:
                 return []
             
             # Retrieve conversation history
-            result = session.execute("""
+            result = session.execute(text("""
                 SELECT message, response, created_at
                 FROM agent_conversations
                 WHERE conversation_id = :conversation_id
                 AND company_user_id = :company_id
                 ORDER BY created_at ASC
-            """, {
+            """), {
                 "conversation_id": conversation_id,
                 "company_id": company_id
             }).fetchall()
@@ -425,3 +448,22 @@ Write ONLY the SQL query, nothing else.
         except Exception as e:
             logger.error(f"Error retrieving conversation history: {str(e)}")
             return [] 
+
+    async def _get_remaining_tokens(self, session: Session, company_id: int) -> Optional[int]:
+        """Helper to get the current remaining tokens."""
+        if not session:
+            return None
+        try:
+            result = session.execute(text("""
+                SELECT u.ai_agent_tokens_used, p.ai_agent_default_tokens
+                FROM users u
+                JOIN plans p ON u.plan = p.id
+                WHERE u.id = :company_id
+            """), {"company_id": company_id}).fetchone()
+            if result:
+                tokens_used, tokens_allocated = result
+                return max(0, tokens_allocated - tokens_used)
+            return None # User or plan not found
+        except Exception as e:
+            logger.error(f"Error fetching remaining tokens for company {company_id}: {e}")
+            return None 

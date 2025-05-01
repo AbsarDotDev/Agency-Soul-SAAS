@@ -3,10 +3,16 @@ from fastapi.responses import JSONResponse
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
+import logging
 
 from app.agents.sql_agent import SQLAgent
-from app.database.connection import DatabaseConnection
+from app.agents.base_agent import AgentResponse
+from app.database.connection import DatabaseConnection, get_db_session
 from app.core.config import settings
+from app.schema.requests import ChatRequest
+
+# Set up logging for this module
+logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter(prefix="/api")
@@ -38,68 +44,37 @@ class VisualizationRequest(BaseModel):
     visualization_type: Optional[str] = Field(None, description="Optional visualization type")
     agent_type: Optional[str] = Field("sql", description="Agent type (sql, hrm, etc.)")
 
-@router.post("/message", response_model=Dict[str, Any], tags=["Agent"])
-async def process_message(
-    request: MessageRequest,
-    db: Session = Depends(get_db)
+@router.post("/message", response_model=AgentResponse, tags=["Chat"])
+async def chat_endpoint(
+    request: ChatRequest,
+    session: Session = Depends(get_db_session)
 ):
-    """Process a message using the appropriate agent."""
+    """Handle incoming chat messages."""
     try:
-        # Validate required fields
-        if not request.message:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Message is required"
-            )
+        logger.info(f"Received message request for company {request.company_id}")
+        # TODO: Add more sophisticated agent selection logic if needed
+        agent = SQLAgent()
         
-        if not request.company_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Company ID is required"
-            )
-        
-        if not request.user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User ID is required"
-            )
-        
-        # Select the appropriate agent based on type
-        if request.agent_type.lower() == "hrm":
-            # For now, we'll use SQLAgent for all requests
-            agent = SQLAgent()
-        else:
-            # Default to SQL agent
-            agent = SQLAgent()
-        
-        # Process the message
-        response = await agent.process_message(
+        # Process the message using the agent
+        agent_response_obj: AgentResponse = await agent.process_message(
             message=request.message,
             company_id=request.company_id,
             user_id=request.user_id,
             conversation_id=request.conversation_id,
-            session=db
+            session=session
         )
         
-        # Return the response
-        return {
-            "message": response.message,
-            "conversation_id": response.conversation_id,
-            "visualization": response.visualization
-        }
-    except HTTPException as e:
-        # Re-raise HTTPExceptions
-        raise
-    except Exception as e:
-        # Log the error
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error processing message: {str(e)}")
+        logger.info(f"Agent processed message. Returning response for convo {agent_response_obj.conversation_id}")
         
-        # Return a 500 error
+        # Explicitly return the Pydantic model; FastAPI should serialize it correctly
+        # based on the response_model=AgentResponse definition in @router.post
+        return agent_response_obj
+        
+    except Exception as e:
+        logger.error(f"Error processing message: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing message: {str(e)}"
+            status_code=500, 
+            detail=f"An internal error occurred: {str(e)}"
         )
 
 @router.post("/visualization", response_model=Dict[str, Any], tags=["Agent"])
@@ -155,8 +130,6 @@ async def generate_visualization(
         raise
     except Exception as e:
         # Log the error
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Error generating visualization: {str(e)}")
         
         # Return a 500 error
@@ -199,8 +172,6 @@ async def get_token_usage(
         raise
     except Exception as e:
         # Log the error
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Error getting token usage: {str(e)}")
         
         # Return a 500 error

@@ -62,7 +62,7 @@ def _get_openai_model(model_name: str = "gpt-4-turbo") -> ChatOpenAI:
         temperature=0.1
     )
 
-def _get_google_model(model_name: str = "gemini-pro") -> ChatGoogleGenerativeAI:
+def _get_google_model(model_name: str = "gemini-2.0-flash") -> ChatGoogleGenerativeAI:
     """Get a Google Generative AI model instance.
     
     Args:

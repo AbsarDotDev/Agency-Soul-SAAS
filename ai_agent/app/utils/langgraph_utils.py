@@ -22,7 +22,7 @@ class ChatState(TypedDict):
     conversation_id: str
 
 
-def create_llm(model_name: str = "gemini-1.5-pro"):
+def create_llm(model_name: str = "gemini-2.0-flash"):
     """Create LangChain LLM instance.
     
     Args:
