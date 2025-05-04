@@ -371,6 +371,29 @@
                 @endif
                 <!--------------------- End Dashboard ----------------------------------->
 
+                <!--------------------- Start AI Agent ----------------------------------->
+                @if (!empty($userPlan) && $userPlan->ai_agent_enabled == 1)
+                    <li class="dash-item dash-hasmenu {{ Request::segment(1) == 'ai-agent' ? 'active dash-trigger' : '' }}">
+                        <a href="#!" class="dash-link">
+                            <span class="dash-micon">
+                                <i class="ti ti-brain"></i>
+                            </span>
+                            <span class="dash-mtext">
+                                {{ __('AI Agent') }}
+                            </span>
+                            <span class="dash-arrow">
+                                <i data-feather="chevron-right"></i>
+                            </span>
+                        </a>
+                        <ul class="dash-submenu">
+                            <li class="dash-item {{ Request::route()->getName() == 'ai_agent.chat.show' ? 'active' : '' }}">
+                                <a class="dash-link" href="{{ route('ai_agent.chat.show') }}">{{ __('Chat Interface') }}</a>
+                            </li>
+                        </ul>
+                    </li>
+                @endif
+                <!--------------------- End AI Agent ----------------------------------->
+
                 <!--------------------- Start HRM ----------------------------------->
 
                 @if (!empty($userPlan) && $userPlan->hrm == 1)
@@ -1471,7 +1494,7 @@
                     <li class="dash-item {{ Request::segment(1) == 'ai-agent' ? ' active' : '' }}">
                         <a href="{{ route('ai_agent.chat.show') }}" class="dash-link ">
                             <span class="dash-micon">
-                                <i class="ti ti-brain"></i> {{-- Changed Icon --}}
+                                <i class="ti ti-robot"></i> {{-- Added Icon --}}
                             </span>
                             <span class="dash-mtext">{{ __('AI Agent') }}</span>
                         </a>

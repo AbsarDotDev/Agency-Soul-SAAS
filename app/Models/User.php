@@ -244,7 +244,11 @@ class User extends Authenticatable implements MustVerifyEmail
             } else {
                 $this->plan_expire_date = null;
             }
-            $this->save();
+            // $this->save();
+             // Assign AI Agent settings from the plan
+            //  $this->ai_agent_enabled = $plan->ai_agent_enabled ?? 0;
+             $this->ai_agent_tokens_used = 0; // Reset token usage on new plan assignment
+             $this->save(); // Save again to persist AI settings
 
             if ($company_id != 0) {
                 $user_id = $company_id;

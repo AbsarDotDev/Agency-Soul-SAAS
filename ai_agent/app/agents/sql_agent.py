@@ -286,7 +286,7 @@ TECHNICAL RULES:
             tokens_remaining_after = None
 
             try:
-                # Execute agent and capture full response including potential token usage
+                # Execute agent and capture full respsonse including potential token usage
                 # We use ainvoke which returns a richer dictionary than arun
                 agent_result = await agent_executor.ainvoke({"input": message})
                 
@@ -691,7 +691,7 @@ TECHNICAL RULES:
         """Helper to get the current remaining tokens."""
         # This method seems unused and token management is handled elsewhere.
         # Consider removing or implementing if needed.
-        pass
+        pass 
 
     async def _get_isolation_columns_info(self, company_id: int) -> Dict[str, str]:
         """Get information about isolation columns for commonly used tables.

@@ -175,6 +175,17 @@
                                                 class="text-primary ti ti-circle-plus"></i></span>{{ $plan->chatgpt == 1 ? __('Enable') : __('Disable') }}
                                         {{ __('Chat GPT') }}</li>
 
+                                    {{-- AI Agent Display --}}
+                                    <li class="white-sapce-nowrap"><span class="theme-avtar"><i
+                                                class="text-primary ti ti-circle-plus"></i></span>{{ $plan->ai_agent_enabled == 1 ? __('Enable') : __('Disable') }}
+                                        {{ __('AI Agent') }}</li>
+                                    @if($plan->ai_agent_enabled == 1)
+                                        <li class="white-sapce-nowrap"><span class="theme-avtar"><i
+                                                    class="text-primary ti ti-circle-plus"></i></span>{{ number_format($plan->ai_agent_default_tokens) }}
+                                            {{ __('Default Tokens') }}</li>
+                                    @endif
+                                    {{-- End AI Agent Display --}}
+
                                 </ul>
                             </div>
                         </div>
