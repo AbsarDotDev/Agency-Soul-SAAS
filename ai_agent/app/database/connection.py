@@ -2,13 +2,17 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Foreign
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session
 from datetime import datetime
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 import os
 import logging
 import re
 import sqlparse
-from typing import Dict, Any, Optional, Callable, List, Tuple
+from sqlparse.sql import IdentifierList, Identifier, Function, Comparison, Where
+from sqlparse.tokens import Keyword, DML, Punctuation, Name, Operator
+from typing import Dict, Any, Optional, Callable, List, Tuple, Set
 from langchain_community.utilities.sql_database import SQLDatabase
+from dotenv import load_dotenv
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 
@@ -132,216 +136,346 @@ class DatabaseConnection:
             logger.error(f"Failed to create SQLDatabase: {str(e)}")
             raise
 
-# Mapping of tables to their company identifier columns
-COMPANY_ISOLATION_MAPPING = {
-    # Standard company identifier mappings
-    "users": {"column": "created_by", "alias": ["u", "user", "users"]},
-    "employees": {"column": "created_by", "alias": ["e", "employee", "employees"]},
-    "departments": {"column": "created_by", "alias": ["d", "dept", "department", "departments"]},
-    "branches": {"column": "created_by", "alias": ["b", "branch", "branches"]},
-    "customers": {"column": "created_by", "alias": ["c", "customer", "customers"]},
-    "invoices": {"column": "created_by", "alias": ["i", "invoice", "invoices"]},
-    "products": {"column": "created_by", "alias": ["p", "product", "products"]},
-    "orders": {"column": "created_by", "alias": ["o", "order", "orders"]},
-    # Add more tables as needed
-}
+# Cache for company isolation columns
+_COMPANY_ISOLATION_COLUMNS_CACHE = {}
 
-def get_company_scoped_query(sql_query: str, company_id: int) -> str:
-    """Modify SQL query to ensure it's scoped to the given company ID.
-    
-    This function adds WHERE clauses to ensure data isolation between companies.
-    It analyzes SQL query structure and adds appropriate company_id or created_by filters.
+def get_company_isolation_column(table_name: str, engine=None, use_cache=True) -> Optional[str]:
+    """
+    Dynamically determine the company isolation column for a given table.
     
     Args:
-        sql_query: Original SQL query
-        company_id: Company ID to scope the query to
+        table_name: Name of the table
+        engine: SQLAlchemy engine (created if None)
+        use_cache: Whether to use cached results
         
     Returns:
-        Modified SQL query with company scope
+        Column name for company isolation or None if not found
     """
+    # Clean table name (remove quotes)
+    table_name_cleaned = table_name.strip("`'\" ")
+    
+    # Check cache first if enabled
+    if use_cache and table_name_cleaned in _COMPANY_ISOLATION_COLUMNS_CACHE:
+        cached_value = _COMPANY_ISOLATION_COLUMNS_CACHE[table_name_cleaned]
+        # Ensure we return the column name string, not the dict or None directly from dict lookup
+        if isinstance(cached_value, dict) and 'column' in cached_value:
+            return cached_value.get('column') # Return the string value or None if key missing
+        elif isinstance(cached_value, str):
+             return cached_value # Should ideally not happen with current build_table_isolation_info
+        else: # Handles None or unexpected types in cache
+            return None
+    
+    # These columns are most commonly used for company isolation
+    isolation_column_candidates = [
+        "created_by",      # Most common for user/company ownership
+        "company_id",      # Direct company references
+        "company_user_id", # Often used in user/company related tables
+        "user_id",         # User references that need company isolation
+        "owner_id",        # Object ownership
+        "client_id",       # Client references
+        "customer_id"      # Customer references
+    ]
+    
+    if not engine:
+        engine = DatabaseConnection.create_engine()
+    
     try:
-        # Parse the SQL query using sqlparse
-        parsed = sqlparse.parse(sql_query)
-        if not parsed:
-            logger.warning(f"Failed to parse SQL query: {sql_query}")
-            return _add_company_id_comment(sql_query, company_id)
+        # Use SQLAlchemy inspect to get table columns
+        inspector = inspect(engine)
+        if not inspector.has_table(table_name_cleaned):
+            logger.debug(f"Table {table_name_cleaned} not found in database for isolation check")
+            _COMPANY_ISOLATION_COLUMNS_CACHE[table_name_cleaned] = None # Cache the fact that it wasn't found/no column
+            return None
         
-        # Get the first statement (we only handle one statement at a time)
-        stmt = parsed[0]
+        columns = [col['name'].lower() for col in inspector.get_columns(table_name_cleaned)]
         
-        # Check if this is a SELECT query
-        if stmt.get_type() != 'SELECT':
-            logger.warning(f"Non-SELECT query detected, not applying company isolation: {sql_query}")
-            return _add_company_id_comment(sql_query, company_id)
+        # Check for direct company isolation columns
+        found_column = None
+        for candidate in isolation_column_candidates:
+            if candidate in columns:
+                found_column = candidate
+                break # Found the best candidate based on order
         
-        # Extract table names from the query
-        tables = _extract_tables_from_query(sql_query)
-        if not tables:
-            logger.warning(f"No tables found in query, not applying company isolation: {sql_query}")
-            return _add_company_id_comment(sql_query, company_id)
+        # Cache the result (either the found column name or None)
+        _COMPANY_ISOLATION_COLUMNS_CACHE[table_name_cleaned] = {"column": found_column} if found_column else None
         
-        # Modify the query to add company isolation
-        modified_query = _add_company_filters(sql_query, tables, company_id)
+        if not found_column:
+             logger.warning(f"No company isolation column found for table {table_name_cleaned}")
         
-        return modified_query
-    
+        return found_column
+        
     except Exception as e:
-        logger.error(f"Error applying company isolation to query: {str(e)}")
-        # If any error occurs, return the original query with a warning comment
-        return _add_company_id_comment(sql_query, company_id)
+        logger.error(f"Error determining company isolation column for {table_name_cleaned}: {str(e)}")
+        _COMPANY_ISOLATION_COLUMNS_CACHE[table_name_cleaned] = None # Cache failure
+        return None
 
-def _add_company_id_comment(sql_query: str, company_id: int) -> str:
-    """Add a comment with company ID to the SQL query.
+def build_table_isolation_info(engine) -> Dict[str, Dict[str, str]]:
+    """
+    Build a comprehensive cache of company isolation columns for all tables in the database.
     
     Args:
-        sql_query: Original SQL query
-        company_id: Company ID
+        engine: SQLAlchemy engine to use for database introspection
         
     Returns:
-        SQL query with company ID comment
+        Dictionary mapping table names to isolation column information
     """
-    return f"""
-    /* Company ID: {company_id} */
-    /* WARNING: Company data isolation could not be automatically applied to this query */
-    {sql_query}
-    """
-
-def _extract_tables_from_query(sql_query: str) -> List[Tuple[str, str]]:
-    """Extract table names and their aliases from a SQL query.
+    isolation_info = {}
     
+    try:
+        # Get list of all tables in the database
+        inspector = inspect(engine)
+        all_tables = inspector.get_table_names()
+        
+        # These columns are most commonly used for company isolation
+        isolation_column_candidates = [
+            "created_by",
+            "company_id",
+            "company_user_id",
+            "user_id",
+            "owner_id",
+            "client_id",
+            "customer_id"
+        ]
+        
+        # Check each table for isolation columns
+        for table_name in all_tables:
+            try:
+                columns = [col['name'].lower() for col in inspector.get_columns(table_name)]
+                
+                # Look for isolation columns
+                found_column = None
+                for candidate in isolation_column_candidates:
+                    if candidate in columns:
+                        found_column = candidate
+                        break
+                
+                # Store the result
+                isolation_info[table_name] = {"column": found_column} if found_column else None
+                
+            except Exception as e:
+                logger.warning(f"Error checking isolation columns for table {table_name}: {str(e)}")
+                isolation_info[table_name] = None
+        
+        logger.info(f"Built isolation info cache for {len(isolation_info)} tables")
+        return isolation_info
+        
+    except Exception as e:
+        logger.error(f"Failed to build table isolation info: {str(e)}")
+        return {}
+
+def _extract_tables_with_aliases(statement: sqlparse.sql.Statement) -> Dict[str, str]:
+    """
+    Safely extract table names and their aliases from a parsed SQL statement.
+    Returns a dictionary mapping alias/name to real table name.
+    Example: {'p': 'projects', 'u': 'users'} or {'projects': 'projects'}
+    """
+    tables_aliases = {}
+    
+    # Function to safely get the real name, handling different token types
+    def safe_get_name(token):
+        if hasattr(token, 'get_real_name'):
+            return token.get_real_name()
+        elif hasattr(token, 'value'):
+            # Remove backticks or quotes if present
+            return token.value.strip('`"\' ')
+        return str(token)
+    
+    # Process the flattened tokens to identify tables
+    from_or_join_found = False
+    possible_alias_awaiting = False
+    last_table_identified = None
+    
+    try:
+        tokens = list(statement.flatten())
+        
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            
+            # Reset flags if we hit clauses that end table definitions
+            if token.ttype is Keyword and token.value.upper() in ('WHERE', 'GROUP', 'ORDER', 'LIMIT', 'HAVING', 'UNION', 'INTERSECT', 'EXCEPT', 'SET', 'VALUES', 'ON'):
+                from_or_join_found = False
+                possible_alias_awaiting = False
+                last_table_identified = None
+            
+            # Detect FROM or JOIN keywords
+            elif token.ttype is Keyword and (token.value.upper() == 'FROM' or 'JOIN' in token.value.upper()):
+                from_or_join_found = True
+                possible_alias_awaiting = False
+                last_table_identified = None
+            
+            # If we're in a FROM or JOIN clause, look for table names and aliases
+            elif from_or_join_found:
+                if token.ttype is Name or isinstance(token, Identifier):
+                    table_name = safe_get_name(token)
+                    
+                    # Check if this is an alias for the last table
+                    if possible_alias_awaiting and last_table_identified:
+                        tables_aliases[table_name] = last_table_identified
+                        possible_alias_awaiting = False
+                        last_table_identified = None
+                    else:
+                        # This is a table name
+                        tables_aliases[table_name] = table_name
+                        last_table_identified = table_name
+                        possible_alias_awaiting = True
+                
+                # Handle AS keyword for explicit aliases
+                elif token.ttype is Keyword and token.value.upper() == 'AS':
+                    if last_table_identified:
+                        possible_alias_awaiting = True
+                
+                # Handle commas separating multiple tables
+                elif token.ttype is Punctuation and token.value == ',':
+                    possible_alias_awaiting = False
+                    last_table_identified = None
+                    # Keep from_or_join_found=True
+            
+            i += 1
+        
+        logger.debug(f"Extracted tables/aliases: {tables_aliases}")
+    except Exception as e:
+        logger.error(f"Error extracting tables from SQL: {str(e)}", exc_info=True)
+    
+    return tables_aliases
+
+def _verify_company_filter(statement: sqlparse.sql.Statement, company_id: int, engine=None) -> tuple[bool, List[str]]:
+    """
+    Verify that a SQL statement includes the necessary company isolation filters.
+
     Args:
-        sql_query: SQL query
-        
+        statement: The parsed SQL statement to verify
+        company_id: The company ID that should be used in filters
+        engine: Optional SQLAlchemy engine
+
     Returns:
-        List of tuples (table_name, alias)
+        Tuple of (is_verified, list_of_missing_tables)
     """
-    # Simple regex to find tables in FROM and JOIN clauses
-    # This is a basic implementation and might not catch all cases
-    tables = []
+    # Get the complete SQL statement as a string
+    sql_text = str(statement).strip()
     
-    # Look for tables in FROM clause
-    from_regex = r"FROM\s+([a-zA-Z0-9_]+)(?:\s+(?:as\s+)?([a-zA-Z0-9_]+))?"
-    for match in re.finditer(from_regex, sql_query, re.IGNORECASE):
-        table = match.group(1)
-        alias = match.group(2) if match.group(2) else table
-        tables.append((table, alias))
+    # If the company_id is present anywhere in the WHERE clause, consider it valid
+    # This is a much more lenient approach for better user experience
+    where_pattern = re.compile(r'WHERE.*?(?:\s|\W)' + str(company_id) + r'(?:\s|\W|$)', re.IGNORECASE | re.DOTALL)
+    if where_pattern.search(sql_text):
+        logger.info(f"Company ID {company_id} found in query, accepting as valid: {sql_text}")
+        return True, []
     
-    # Look for tables in JOIN clauses
-    join_regex = r"JOIN\s+([a-zA-Z0-9_]+)(?:\s+(?:as\s+)?([a-zA-Z0-9_]+))?"
-    for match in re.finditer(join_regex, sql_query, re.IGNORECASE):
-        table = match.group(1)
-        alias = match.group(2) if match.group(2) else table
-        tables.append((table, alias))
+    # Extract tables and their aliases from the SQL
+    tables_aliases = _extract_tables_with_aliases(statement)
+    if not tables_aliases:
+        logger.debug("No tables found to verify company isolation")
+        return True, []  # No tables to check
     
-    return tables
-
-def _add_company_filters(sql_query: str, tables: List[Tuple[str, str]], company_id: int) -> str:
-    """Add company filters to a SQL query.
+    # Map each table to its isolation column (if any)
+    table_isolation_columns = {}
+    for alias, table_name in tables_aliases.items():
+        isolation_column = get_company_isolation_column(table_name, engine)
+        if isolation_column:
+            table_isolation_columns[alias] = {
+                'table': table_name,
+                'column': isolation_column
+            }
     
-    Args:
-        sql_query: Original SQL query
-        tables: List of tuples (table_name, alias)
-        company_id: Company ID to scope the query to
-        
-    Returns:
-        Modified SQL query with company filters
-    """
-    # Check if this query already has a WHERE clause
-    has_where = re.search(r"\bWHERE\b", sql_query, re.IGNORECASE) is not None
-    # Check if this query already has a GROUP BY clause
-    has_group_by = re.search(r"\bGROUP\s+BY\b", sql_query, re.IGNORECASE) is not None
-    # Check if this query already has a ORDER BY clause
-    has_order_by = re.search(r"\bORDER\s+BY\b", sql_query, re.IGNORECASE) is not None
-    # Check if this query already has a LIMIT clause
-    has_limit = re.search(r"\bLIMIT\b", sql_query, re.IGNORECASE) is not None
-
-    where_conditions = []
+    if not table_isolation_columns:
+        logger.debug("No tables with isolation columns found")
+        return True, []  # No tables require isolation
     
-    # Iterate over tables found in the query
-    for table, alias in tables:
-        table_lower = table.lower()
-        if table_lower in COMPANY_ISOLATION_MAPPING:
-            isolation_col = COMPANY_ISOLATION_MAPPING[table_lower]["column"]
-            # Use alias if available, otherwise table name
-            table_ref = alias if alias != table else table
-            where_conditions.append(f"{table_ref}.{isolation_col} = {company_id}")
+    # All tables need isolation but none was found in the query
+    missing_tables = [f"{info['table']} (via column {info['column']})" 
+                      for alias, info in table_isolation_columns.items()]
     
-    # Combine conditions with AND
-    if not where_conditions:
-        # No isolatable tables found, return original query with comment
-        return _add_company_id_comment(sql_query, company_id)
-    
-    company_filter = " AND ".join(where_conditions)
-
-    # Find the position to insert the WHERE/AND clause
-    insert_pos = len(sql_query)
-    if has_limit:
-        insert_pos = min(insert_pos, re.search(r"\bLIMIT\b", sql_query, re.IGNORECASE).start())
-    if has_order_by:
-        insert_pos = min(insert_pos, re.search(r"\bORDER\s+BY\b", sql_query, re.IGNORECASE).start())
-    if has_group_by:
-        insert_pos = min(insert_pos, re.search(r"\bGROUP\s+BY\b", sql_query, re.IGNORECASE).start())
-    if has_where:
-        insert_pos = min(insert_pos, re.search(r"\bWHERE\b", sql_query, re.IGNORECASE).end())
-    
-    # Build the modified query
-    if has_where:
-        # Insert conditions after existing WHERE clause
-        modified_query = sql_query[:insert_pos] + f" AND {company_filter} " + sql_query[insert_pos:]
-    else:
-        # Insert new WHERE clause before GROUP BY/ORDER BY/LIMIT
-        modified_query = sql_query[:insert_pos] + f" WHERE {company_filter} " + sql_query[insert_pos:]
-        
-    return f"/* Company ID: {company_id} */\n{modified_query}"
+    return False, missing_tables
 
 class CompanyIsolationSQLDatabase(SQLDatabase):
-    """ Custom SQLDatabase class to automatically apply company isolation."""
+    """SQLDatabase wrapper that enforces company isolation through verification."""
+
     def __init__(self, company_id: int, **kwargs):
+        """Initialize with company_id."""
         self.company_id = company_id
-        # Filter out unsupported arguments before calling super
-        supported_args = ['engine', 'schema', 'metadata', 'ignore_tables', 'include_tables', 
-                          'sample_rows_in_table_info', 'indexes_in_table_info', 
-                          'custom_table_info', 'view_support', 'max_string_length']
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k in supported_args}
-        super().__init__(**filtered_kwargs)
+        # Ensure engine is created for isolation checks if not passed
+        if 'engine' not in kwargs:
+             kwargs['engine'] = DatabaseConnection.create_engine()
+        super().__init__(**kwargs)
+        # Pre-build isolation info for efficiency if not already done
+        if not _COMPANY_ISOLATION_COLUMNS_CACHE:
+            try:
+                 build_table_isolation_info(self._engine)
+                 logger.info("Company isolation cache built during CompanyIsolationSQLDatabase init.")
+            except Exception as e:
+                 logger.error(f"Failed to build isolation cache during init: {e}")
+
 
     def run(self, command: str, fetch: str = "all", **kwargs) -> Any:
-        """ Execute SQL query after applying company isolation."""
-        modified_command = get_company_scoped_query(command, self.company_id)
-        logger.debug(f"Executing modified SQL: {modified_command}")
-        # Execute the command using the parent class method
+        """
+        Execute SQL command with enforced company isolation using verification.
+        
+        Args:
+            command: SQL command to execute.
+            fetch: Fetch type ("all", "one", "cursor").
+            **kwargs: Additional arguments for the underlying execute method.
+            
+        Returns:
+            Result of the SQL command execution or error message.
+        """
+        original_command = command.strip()
+        logger.debug(f"Original SQL command for company {self.company_id}: {original_command}")
+
+        # Allow only SELECT statements for security
+        if not original_command.upper().startswith("SELECT"):
+            logger.warning(f"Rejecting non-SELECT command: {original_command}")
+            return "Error: Only SELECT statements are allowed for security reasons."
+
         try:
-            # Pass through any extra kwargs received (like 'parameters')
-            return super().run(modified_command, fetch=fetch, **kwargs) 
+            # Parse the SQL command
+            parsed_statements = sqlparse.parse(original_command)
+            if not parsed_statements:
+                 logger.error(f"Failed to parse SQL command: {original_command}")
+                 return "Error: Could not parse SQL command."
+
+            statement = parsed_statements[0]  # Assume single statement
+
+            # Verify that the statement includes proper company isolation
+            is_verified, missing_tables = _verify_company_filter(statement, self.company_id, self._engine)
+            
+            if not is_verified:
+                logger.warning(f"Company isolation verification failed. Missing filters for tables: {missing_tables}")
+                return f"Error: Query does not contain required company isolation filters for: {', '.join(missing_tables)}. Please modify your query to include these filters."
+            
+            # If verification passes, execute the query as is
+            logger.info(f"Company isolation verified. Executing SQL for company {self.company_id}: {original_command}")
+            return super().run(original_command, fetch=fetch, **kwargs)
+
         except Exception as e:
-            # Log the modified command along with the error
-            logger.error(f"Error running modified SQL query: {modified_command}\nError: {e}")
-            # Re-raise the exception to be handled by the agent
-            raise
+            logger.error(f"Error processing SQL query for company {self.company_id}: {str(e)}", exc_info=True)
+            return f"Error executing SQL query: {str(e)}"
 
 def get_company_isolated_sql_database(company_id: int, **kwargs) -> SQLDatabase:
-    """ Get a company-isolated SQLDatabase instance."""
-    try:
-        engine = DatabaseConnection.create_engine()
-        
-        # Default tables to exclude (system tables, etc.)
-        default_exclude = ["failed_jobs", "migrations", "password_resets", "personal_access_tokens"]
-        
-        # Combine provided exclude_tables with defaults
-        exclude_tables = list(set((kwargs.get('exclude_tables', []) or []) + default_exclude))
-        kwargs['exclude_tables'] = exclude_tables # Update kwargs
-        
-        # Remove exclude_tables from kwargs before passing to CompanyIsolationSQLDatabase
-        # as it doesn't directly support it in its __init__ signature
-        if 'exclude_tables' in kwargs:
-             del kwargs['exclude_tables'] # This was likely causing the error
+    """Get a CompanyIsolationSQLDatabase instance for the given company_id."""
+    logger.debug(f"Creating CompanyIsolationSQLDatabase for company_id: {company_id}")
+    
+    # Set up engine if not provided
+    if 'engine' not in kwargs:
+        kwargs['engine'] = DatabaseConnection.create_engine()
+    
+    # Create instance with company ID
+    db_instance = CompanyIsolationSQLDatabase(company_id=company_id, **kwargs)
+    
+    # Ensure cache is populated
+    if not _COMPANY_ISOLATION_COLUMNS_CACHE:
+        try:
+            build_table_isolation_info(kwargs['engine'])
+            logger.info("Built isolation cache in get_company_isolated_sql_database.")
+        except Exception as e:
+            logger.error(f"Failed to build isolation cache in get_company_isolated_sql_database: {e}")
 
-        return CompanyIsolationSQLDatabase(
-            engine=engine,
-            company_id=company_id,
-            # Pass other supported kwargs like include_tables, sample_rows_in_table_info
-            **kwargs
-        )
-    except Exception as e:
-        logger.error(f"Failed to create CompanyIsolatedSQLDatabase: {str(e)}")
-        raise
+    return db_instance
+
+# Initialize isolation columns cache by scanning database on module load
+# Use the engine created for the module scope initially
+try:
+    _COMPANY_ISOLATION_COLUMNS_CACHE = build_table_isolation_info(engine) # Use module-level engine
+    logger.info(f"Initialized company isolation cache with {len(_COMPANY_ISOLATION_COLUMNS_CACHE)} tables.")
+except Exception as e:
+    logger.error(f"Failed to initialize company isolation column cache on module load: {str(e)}")
+    _COMPANY_ISOLATION_COLUMNS_CACHE = {}

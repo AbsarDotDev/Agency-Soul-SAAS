@@ -183,4 +183,38 @@ async def get_token_usage(
 @router.get("/health", tags=["Health"])
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy"} 
+    return {"status": "healthy"}
+
+class ConversationHistoryResponse(BaseModel):
+    messages: List[Dict[str, str]] = Field(..., description="List of messages in the conversation")
+
+@router.get("/conversation/{conversation_id}", response_model=ConversationHistoryResponse, tags=["Chat"])
+async def get_conversation_history_endpoint(
+    conversation_id: str,
+    company_id: int,  # Assuming company_id is needed for authorization/scoping
+    session: Session = Depends(get_db_session)
+):
+    """Retrieve the message history for a specific conversation."""
+    try:
+        logger.info(f"Fetching conversation history for ID: {conversation_id}, Company: {company_id}")
+        
+        # Use a temporary agent instance to access the base class method
+        # In a more complex setup, you might have a dedicated service for this
+        temp_agent = SQLAgent() # Or any agent inheriting from BaseAgent
+        
+        messages = await temp_agent.get_conversation_messages(session, conversation_id, company_id)
+        
+        if not messages:
+             # You might want to distinguish between "not found" and "empty"
+             logger.warning(f"No messages found for conversation {conversation_id} or access denied.")
+             # Return empty list if no messages found,符合 Pydantic 模型
+             # Alternatively, raise HTTPException(status_code=404, detail="Conversation not found")
+             
+        return ConversationHistoryResponse(messages=messages)
+
+    except Exception as e:
+        logger.error(f"Error fetching conversation history {conversation_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve conversation history: {str(e)}"
+        ) 
