@@ -28,6 +28,44 @@
     $meta_image = \App\Models\Utility::get_file('uploads/meta/');
     $meta_logo = isset($setting['meta_image']) ? $setting['meta_image'] : '';
 
+    $users = \Auth::user();
+    $currantLang = $users->currentLanguage();
+    $languages = \App\Models\Utility::languages();
+    $profile = asset(Storage::url('uploads/avatar/'));
+    $company_logo = $logo .'/'. ($setting['company_logo_light'] ?? 'logo-light.png');
+    $favicon = Utility::getValByName('company_favicon');
+
+    $darklayout = '';
+    if( Auth::user()->mode == 'dark'){
+        $darklayout = 'dark';
+    }
+
+    // AI Agent Logic
+    $ai_tokens_remaining = 0;
+    $company_user = null;
+    $plan = null;
+    $ai_feature_enabled = false;
+    
+    if ($users) {
+        if ($users->type == 'company') {
+            $company_user = $users;
+        } elseif ($users->created_by) {
+            $company_user = App\Models\User::find($users->created_by);
+        }
+
+        if ($company_user && $company_user->type == 'company') {
+            // Get the current plan
+            $plan = \App\Models\Plan::find($company_user->plan);
+            
+            // Check if the plan has AI agent enabled
+            $ai_feature_enabled = $plan && $plan->ai_agent_enabled == 1;
+            
+            // Calculate tokens remaining based on plan allocation and user usage
+            $tokens_allocated = $plan ? $plan->ai_agent_default_tokens : 0;
+            $ai_tokens_remaining = max(0, $tokens_allocated - $company_user->ai_agent_tokens_used);
+        }
+    }
+    // End AI Agent Logic
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ $SITE_RTL == 'on' ? 'rtl' : '' }}">
@@ -261,6 +299,16 @@
     </div>
     @include('partials.admin.footer')
     @include('Chatify::layouts.footerLinks')
+
+    {{-- Floating AI Agent Button --}}
+    @if($ai_feature_enabled)
+        <a href="{{ route('ai_agent.chat.show') }}" class="btn btn-primary btn-lg rounded-circle shadow-lg ai-agent-float-button" 
+           data-bs-toggle="tooltip" title="{{__('Chat with AI Agent')}}" 
+           style="position: fixed; bottom: 30px; right: 30px; z-index: 1050; padding: 1rem 1.1rem;">
+            <i class="ti ti-brain" style="font-size: 1.5rem;"></i>
+        </a>
+    @endif
+    {{-- End Floating AI Agent Button --}}
 
 </body>
 

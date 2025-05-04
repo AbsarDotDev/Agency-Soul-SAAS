@@ -121,6 +121,24 @@
             </div>
         </div>
 
+        {{-- AI Agent Settings --}}
+        <div class="col-md-12">
+            <hr>
+            <h5>{{__('AI Agent Settings')}}</h5>
+        </div>
+        <div class="form-group col-md-3 mt-2">
+            <div class="form-check form-switch">
+                <input type="checkbox" class="form-check-input" name="ai_agent_enabled" id="enable_ai_agent" {{ $plan['ai_agent_enabled'] == 1 ? 'checked="checked"' : '' }}>
+                <label class="custom-control-label form-label" for="enable_ai_agent">{{__('Enable AI Agent')}}</label>
+            </div>
+        </div>
+        <div class="form-group col-md-9 ai_agent_options {{ $plan['ai_agent_enabled'] == 1 ? '' : 'd-none' }}">
+            {{Form::label('ai_agent_default_tokens',__('Default Monthly Tokens'),['class'=>'form-label'])}}<x-required></x-required>
+            {{Form::number('ai_agent_default_tokens', $plan->ai_agent_default_tokens ?? 0, ['class'=>'form-control', 'id'=>'ai_agent_default_tokens', 'required'=> ($plan->ai_agent_enabled == 1), 'placeholder' => __('Enter Default Monthly Tokens'), 'min' => 0])}}
+            <span class="small">{{__('Set the default number of tokens allocated to companies on this plan each month.')}}</span>
+        </div>
+        {{-- End AI Agent Settings --}}
+
     </div>
     </div>
 
@@ -129,4 +147,21 @@
     <input type="submit" value="{{__('Update')}}" class="btn  btn-primary">
 </div>
     {{ Form::close() }}
+
+{{-- Add Javascript for AI Agent Token Toggle --}}
+<script type="text/javascript">
+    $(document).on('change', '#enable_ai_agent', function() {
+        if($(this).is(':checked')) {
+            $('.ai_agent_options').removeClass('d-none');
+            $('#ai_agent_default_tokens').prop('required', true);
+        } else {
+            $('.ai_agent_options').addClass('d-none');
+            $('#ai_agent_default_tokens').prop('required', false);
+        }
+    });
+    // Trigger change on load in case it's already checked
+    // $(document).ready(function() {
+    //     $('#enable_ai_agent').trigger('change');
+    // });
+</script>
 

@@ -26,6 +26,8 @@ class Plan extends Model
         'pos',
         'chatgpt',
         'storage_limit',
+        'ai_agent_enabled',
+        'ai_agent_default_tokens',
     ];
 
     private static $getplans = NULL;

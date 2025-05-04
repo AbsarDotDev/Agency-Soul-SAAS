@@ -1,0 +1,25 @@
+
+   ReflectionException 
+
+  Class "MessagesController" does not exist
+
+  at vendor/laravel/framework/src/Illuminate/Foundation/Console/RouteListCommand.php:229
+    225▕             if ($this->isFrameworkController($route)) {
+    226▕                 return false;
+    227▕             }
+    228▕ 
+  ➜ 229▕             $path = (new ReflectionClass($route->getControllerClass()))
+    230▕                                 ->getFileName();
+    231▕         } else {
+    232▕             return false;
+    233▕         }
+
+      [2m+3 vendor frames [22m
+
+  4   [internal]:0
+      Illuminate\Foundation\Console\RouteListCommand::Illuminate\Foundation\Console\{closure}(Object(Illuminate\Routing\Route))
+      [2m+17 vendor frames [22m
+
+  22  artisan:13
+      Illuminate\Foundation\Application::handleCommand(Object(Symfony\Component\Console\Input\ArgvInput))
+

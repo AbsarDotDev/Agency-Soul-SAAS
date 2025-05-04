@@ -212,10 +212,10 @@ def get_company_isolation_column(table_name: str, engine=None, use_cache=True) -
 def build_table_isolation_info(engine) -> Dict[str, Dict[str, str]]:
     """
     Build a comprehensive cache of company isolation columns for all tables in the database.
-    
+
     Args:
         engine: SQLAlchemy engine to use for database introspection
-        
+
     Returns:
         Dictionary mapping table names to isolation column information
     """
@@ -336,18 +336,18 @@ def _extract_tables_with_aliases(statement: sqlparse.sql.Statement) -> Dict[str,
         logger.debug(f"Extracted tables/aliases: {tables_aliases}")
     except Exception as e:
         logger.error(f"Error extracting tables from SQL: {str(e)}", exc_info=True)
-    
+
     return tables_aliases
 
 def _verify_company_filter(statement: sqlparse.sql.Statement, company_id: int, engine=None) -> tuple[bool, List[str]]:
     """
     Verify that a SQL statement includes the necessary company isolation filters.
-
+    
     Args:
         statement: The parsed SQL statement to verify
         company_id: The company ID that should be used in filters
         engine: Optional SQLAlchemy engine
-
+        
     Returns:
         Tuple of (is_verified, list_of_missing_tables)
     """

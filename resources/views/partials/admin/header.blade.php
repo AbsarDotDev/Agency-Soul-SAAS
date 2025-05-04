@@ -86,6 +86,47 @@
                     </li>
                 @endif
 
+                {{-- AI Agent Token Display --}}
+                @php
+                    // This logic block is now slightly redundant as it's also in admin.blade.php
+                    // Consider refactoring into a View Composer or Service Provider later if needed
+                    $ai_tokens_remaining_header = 0; // Use a different variable name to avoid conflict
+                    $company_user_header = null;
+                    $plan_header = null;
+                    $ai_feature_enabled_header = false;
+                    
+                    $users_header = \Auth::user(); // Need to get user again here
+                    if ($users_header) {
+                        if ($users_header->type == 'company') {
+                            $company_user_header = $users_header;
+                        } elseif ($users_header->created_by) {
+                            $company_user_header = App\Models\User::find($users_header->created_by);
+                        }
+                
+                        if ($company_user_header && $company_user_header->type == 'company') {
+                            // Get the current plan
+                            $plan_header = \App\Models\Plan::find($company_user_header->plan);
+                            
+                            // Check if the plan has AI agent enabled
+                            $ai_feature_enabled_header = $plan_header && $plan_header->ai_agent_enabled == 1;
+                            
+                            // Calculate tokens remaining based on plan allocation and user usage
+                            $tokens_allocated_header = $plan_header ? $plan_header->ai_agent_default_tokens : 0;
+                            $ai_tokens_remaining_header = max(0, $tokens_allocated_header - $company_user_header->ai_agent_tokens_used);
+                        }
+                    }
+                @endphp
+                
+                @if($ai_feature_enabled_header)
+                    <li class="dash-h-item" id="header-token-display">
+                        <a href="{{ route('ai_agent.chat.show') }}" class="dash-head-link" title="{{ __('AI Agent Tokens') }}">
+                            <i class="ti ti-robot text-primary"></i>
+                            <span class="badge bg-primary text-dark dark:text-white ms-1 px-2 py-1 rounded-pill {{ $ai_tokens_remaining_header > 0 ? '' : 'opacity-75' }} remaining-tokens">{{ number_format($ai_tokens_remaining_header) }}</span>
+                        </a>
+                    </li>
+                @endif
+                {{-- End AI Agent Token Display --}}
+
                 <li class="dropdown dash-h-item drp-language">
                     <a
                         class="dash-head-link dropdown-toggle arrow-none me-0"
