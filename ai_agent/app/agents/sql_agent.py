@@ -3,21 +3,27 @@ import logging
 import uuid
 import json
 from datetime import datetime
+import re
 
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_community.agent_toolkits.sql.base import create_sql_agent
-from langchain.chains import create_sql_query_chain
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
-from langchain.output_parsers.openai_tools import PydanticToolsParser
-from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
+from langchain_community.utilities import SQLDatabase
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from langchain.tools import Tool
 
-from app.agents.base_agent import BaseAgent, AgentResponse, VisualizationResult
-from app.database.connection import get_company_isolated_sql_database, COMPANY_ISOLATION_MAPPING
+from app.agents.base_agent import BaseAgent, AgentResponse, VisualizationResult, ActionResult
+from app.database.connection import DatabaseConnection, get_company_isolated_sql_database, get_company_isolation_column
 from app.core.llm import get_llm, get_embedding_model
 from app.visualizations.generator import generate_visualization_from_data
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain.agents import AgentExecutor
+from langchain.agents.format_scratchpad import format_to_openai_function_messages
+from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
+from langchain_core.utils.function_calling import convert_to_openai_function
+from langchain.memory import ConversationBufferMemory
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -28,8 +34,117 @@ class SQLQueryResult(BaseModel):
     result: List[Dict[str, Any]] = Field(description="The result of the SQL query")
     explanation: str = Field(description="A natural language explanation of the result")
 
+class MCPMySQLTool:
+    """Tool for interacting with the MCP MySQL server."""
+    
+    @staticmethod
+    async def list_tables(company_id: int) -> List[str]:
+        """List all tables in the database.
+        
+        Args:
+            company_id: Company ID
+            
+        Returns:
+            List of table names
+        """
+        engine = DatabaseConnection.create_engine()
+        session = Session(engine)
+        try:
+            result = session.execute(text("""
+                SELECT TABLE_NAME 
+                FROM information_schema.tables 
+                WHERE table_schema = DATABASE()
+                AND table_type = 'BASE TABLE'
+                ORDER BY TABLE_NAME
+            """)).fetchall()
+            
+            return [row[0] for row in result]
+        except Exception as e:
+            logger.error(f"Error listing tables: {str(e)}")
+            return []
+        finally:
+            session.close()
+    
+    @staticmethod
+    async def get_table_schema(table_name: str, company_id: int) -> List[Dict[str, Any]]:
+        """Get schema information for a table.
+        
+        Args:
+            table_name: Table name
+            company_id: Company ID
+            
+        Returns:
+            List of column details
+        """
+        engine = DatabaseConnection.create_engine()
+        session = Session(engine)
+        try:
+            result = session.execute(text("""
+                SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                AND table_name = :table_name
+                ORDER BY ORDINAL_POSITION
+            """), {"table_name": table_name}).fetchall()
+            
+            columns = []
+            for row in result:
+                columns.append({
+                    "name": row[0],
+                    "data_type": row[1],
+                    "column_type": row[2],
+                    "is_nullable": row[3],
+                    "column_key": row[4],
+                    "default": row[5],
+                    "extra": row[6]
+                })
+            
+            # Check if this table has a company isolation column
+            isolation_column = get_company_isolation_column(table_name)
+            
+            return {
+                "columns": columns,
+                "isolation_column": isolation_column
+            }
+        except Exception as e:
+            logger.error(f"Error getting schema for table {table_name}: {str(e)}")
+            return {"columns": [], "isolation_column": None}
+        finally:
+            session.close()
+    
+    @staticmethod
+    async def execute_query(query: str, company_id: int) -> Dict[str, Any]:
+        """Execute a SQL query with company isolation.
+        
+        Args:
+            query: SQL query
+            company_id: Company ID
+            
+        Returns:
+            Query results
+        """
+        # Use existing company isolated database for query execution
+        sql_database = get_company_isolated_sql_database(
+            company_id=company_id,
+            sample_rows_in_table_info=3
+        )
+        
+        try:
+            # Execute the query
+            results = sql_database.run(query)
+            return {"status": "success", "results": results}
+        except Exception as e:
+            logger.error(f"Error executing query: {str(e)}\nQuery: {query}")
+            return {"status": "error", "error": str(e)}
+
 class SQLAgent(BaseAgent):
-    """SQL agent for dynamic database queries."""
+    """SQL agent for database queries and data visualization."""
+    
+    def __init__(self):
+        """Initialize SQL agent."""
+        super().__init__()
+        self.type = "sql"
+        self.mcp_mysql_tool = MCPMySQLTool()
     
     async def process_message(
         self, 
@@ -39,11 +154,11 @@ class SQLAgent(BaseAgent):
         conversation_id: Optional[str] = None,
         session: Optional[Session] = None
     ) -> AgentResponse:
-        """Process a message using dynamic SQL query generation.
+        """Process message related to database queries.
         
         Args:
             message: User message
-            company_id: Company ID for data isolation
+            company_id: Company ID
             user_id: User ID
             conversation_id: Optional conversation ID
             session: Optional database session
@@ -51,187 +166,145 @@ class SQLAgent(BaseAgent):
         Returns:
             Agent response
         """
-        # Generate new conversation ID if not provided
-        if not conversation_id:
-            conversation_id = str(uuid.uuid4())
-        
         try:
-            # Verify token usage
-            if session:
-                # Fetch user's token usage and plan's token allocation
-                result = session.execute(text("""
-                    SELECT u.ai_agent_tokens_used, p.ai_agent_default_tokens
-                    FROM users u
-                    JOIN plans p ON u.plan = p.id
-                    WHERE u.id = :company_id AND p.ai_agent_enabled = 1
-                """), {
-                    "company_id": company_id
-                }).fetchone()
-                
-                if not result:
-                     # This could mean user not found, plan not found, or plan does not have AI enabled
-                    logger.warning(f"Could not retrieve token/plan info for company_id: {company_id}. User or valid AI plan might not exist.")
-                    return AgentResponse(
-                        message="Could not verify AI Agent access or plan status. Please contact support.",
-                        conversation_id=conversation_id
-                    )
-                
-                tokens_used, tokens_allocated = result
-                tokens_remaining = tokens_allocated - tokens_used
-                
-                if tokens_remaining <= 0:
-                    logger.info(f"Company {company_id} has no remaining AI tokens.")
-                    return AgentResponse(
-                        message="You have used all your AI Agent tokens. Please contact your administrator.",
-                        conversation_id=conversation_id
-                    )
+            # Generate new conversation ID if not provided
+            if not conversation_id:
+                conversation_id = str(uuid.uuid4())
             
-            # Get conversation history if conversation ID is provided
-            conversation_history = []
-            if conversation_id and session:
+            # Initialize LLM
+            llm = get_llm()
+            
+            # Create SQL database with company isolation
+            sql_database = get_company_isolated_sql_database(
+                company_id=company_id,
+                sample_rows_in_table_info=3
+            )
+            
+            # Get isolation columns information for key tables
+            isolation_info = await self._get_isolation_columns_info(company_id)
+            
+            # Create SQL toolkit
+            toolkit = SQLDatabaseToolkit(
+                db=sql_database,
+                llm=llm
+            )
+            
+            # Create memory for conversation history
+            memory = ConversationBufferMemory(
+                memory_key="chat_history", 
+                return_messages=True
+            )
+            
+            # Retrieve and load conversation history
+            if session:
                 conversation_history = await self._get_conversation_history(
                     conversation_id=conversation_id,
                     company_id=company_id,
                     session=session
                 )
+                for exchange in conversation_history:
+                    memory.chat_memory.add_user_message(exchange['message'])
+                    memory.chat_memory.add_ai_message(exchange['response'])
             
-            # Create company-isolated SQLDatabase instance
-            db = get_company_isolated_sql_database(company_id)
+            # Create additional schema info tools
+            list_tables_tool = Tool(
+                name="List_Database_Tables",
+                description="Lists all tables in the database to understand what data is available",
+                func=lambda _: self.mcp_mysql_tool.list_tables(company_id)
+            )
             
-            # Get database schema details for the system prompt
-            tables_info = self._get_filtered_table_info(db) 
+            get_table_schema_tool = Tool(
+                name="Get_Table_Schema",
+                description="Gets detailed schema information for a specific table including column names, types, and isolation information",
+                func=lambda table_name: self.mcp_mysql_tool.get_table_schema(table_name, company_id)
+            )
             
-            # Create a SQLDatabaseToolkit instance
-            llm = get_llm()
-            toolkit = SQLDatabaseToolkit(db=db, llm=llm)
+            # Add custom tools to the toolkit
+            toolkit.get_tools().extend([list_tables_tool, get_table_schema_tool])
             
-            # Build system prompt with detailed database context
-            system_prompt = f"""
-You are an SQL expert and data analyst helping a company (ID: {company_id}) analyze their data. 
-You have access to their database schema and can run SQL queries to answer their questions.
+            # Enhance system message with company-specific context and SQL safety
+            isolation_instructions = self._format_isolation_instructions(isolation_info, company_id)
+            
+            system_message_content = f"""You are a friendly, helpful AI assistant working with a company's database. 
+You help users query data and analyze their business information in natural, conversational language.
+            
+DATA ISOLATION CRITICAL RULE:
+ALWAYS include WHERE created_by = {company_id} in ALL your queries.
+This is required for security, no exceptions.
 
-# CRITICAL DATA PRIVACY REQUIREMENTS:
-EXTREMELY IMPORTANT: You must ONLY access data that belongs to the company with ID {company_id}.
-The database contains data from multiple companies, but you should NEVER query data from other companies.
+QUERY EXAMPLE:
+SELECT * FROM projects WHERE created_by = {company_id};
+SELECT * FROM employees WHERE created_by = {company_id};
+SELECT p.name, e.name FROM projects p JOIN employees e WHERE p.created_by = {company_id} AND e.created_by = {company_id};
 
-# DATABASE STRUCTURE:
-The database is structured with company isolation. Each relevant table has a "created_by" column or a similar company identifier.
-Here are the key tables you have access to:
+RESPONSE GUIDELINES:
+1. Always use natural, conversational language
+2. Explain insights in business terms, not database terms
+3. Present numerical results in a readable format
+4. Keep responses friendly and helpful
 
-{tables_info}
+TECHNICAL RULES:
+1. Write SQL compatible with MySQL 5.7
+2. Only use SELECT statements (no INSERT, UPDATE, DELETE, etc.)
+3. When joining tables, ensure proper join conditions
+"""
 
-# DATA ISOLATION ENFORCEMENT:
-All your queries will be automatically modified to include company filters (e.g., "WHERE created_by = {company_id}"), 
-but you should still be aware of this restriction when writing your queries.
-
-# HOW TO APPROACH QUESTIONS:
-1. Think about what tables contain the relevant data based on the schema provided
-2. Focus on writing SQL queries that involve only the necessary tables
-3. Don't worry about adding company_id or created_by filters - these will be added automatically
-4. If appropriate, suggest visualizations based on the data
-5. Always explain results in a way that's easy for the user to understand
-            """
-            
-            # Include conversation history in prompt if available
-            user_prompt = message
-            if conversation_history:
-                context = "Previous conversation:\n"
-                for msg in conversation_history[-3:]:  # Include the 3 most recent exchanges
-                    context += f"User: {msg['message']}\nAssistant: {msg['response']}\n\n"
-                user_prompt = f"{context}\nNew question: {message}"
-            
-            # Create a SQL agent
+            # Create agent executor with enhanced prompt
             agent_executor = create_sql_agent(
                 llm=llm,
                 toolkit=toolkit,
                 verbose=True,
-                agent_executor_kwargs={"handle_parsing_errors": True},
-                prefix=system_prompt
+                agent_type="openai-tools",
+                handle_parsing_errors=True,
+                memory=memory,
+                max_iterations=5,
+                prefix=system_message_content  # Use our enhanced prompt
             )
             
-            # Execute the agent
-            result = await agent_executor.ainvoke({"input": user_prompt})
-            response_text = result["output"]
-            
-            # Update token usage (placeholder for actual token counting)
-            tokens_to_consume = 1  # This would be calculated based on actual token usage
-            if session:
-                update_success = await self._update_token_usage(
-                    session=session,
-                    company_id=company_id,
-                    tokens_used=tokens_to_consume # Use a different name
-                )
-                if not update_success:
-                     logger.error(f"Failed to update token usage for company {company_id}")
-                     # Decide how to handle this - maybe still save convo but log error?
+            # Process message with agent
+            try:
+                agent_response = await agent_executor.arun(message)
                 
-                # Save conversation
-                await self._save_conversation(
-                    session=session,
+                # Check if the response contains SQL code blocks and clean them
+                cleaned_response = self._clean_response_for_end_user(agent_response)
+                
+                # Add conversation to history
+                if session:
+                    await self._save_conversation(
+                        conversation_id=conversation_id,
+                        company_id=company_id,
+                        user_id=user_id,
+                        message=message,
+                        response=cleaned_response,
+                        agent_type=self.type,
+                        session=session
+                    )
+                
+                # Generate a title for the conversation if it's new
+                conversation_title = await self._generate_conversation_title(
+                    conversation_id, company_id, message, cleaned_response
+                )
+                
+                return AgentResponse(
                     conversation_id=conversation_id,
-                    company_id=company_id,
-                    user_id=user_id,
-                    message=message,
-                    response=response_text,
-                    agent_type="SQL",
-                    tokens_used=tokens_to_consume
+                    response=cleaned_response,
+                    conversation_title=conversation_title,
+                    created_at=datetime.now().isoformat()
                 )
-            
-            # Return response including remaining tokens
-            # We fetch the latest count AFTER decrementing
-            final_tokens_remaining = await self._get_remaining_tokens(session, company_id)
-            
-            response_payload = AgentResponse(
-                message=response_text,
-                conversation_id=conversation_id,
-                tokens_remaining=final_tokens_remaining,
-                tokens_used=tokens_to_consume
-            )
-            
-            # Log the payload just before returning
-            logger.info(f"Returning payload to API: {response_payload.model_dump()}")
-            
-            return response_payload
-            
+            except Exception as e:
+                logger.error(f"Agent execution error: {str(e)}")
+                return AgentResponse(
+                    conversation_id=conversation_id,
+                    response=f"I'm having trouble processing your request. Please try rephrasing. Error: {str(e)}",
+                    conversation_title=None
+                )
         except Exception as e:
-            logger.error(f"Error in SQL agent: {str(e)}")
+            logger.error(f"Error processing message: {str(e)}", exc_info=True)
             return AgentResponse(
-                message=f"I encountered an error while trying to answer your question: {str(e)}. Please try again or rephrase your question.",
-                conversation_id=conversation_id
+                conversation_id=str(uuid.uuid4()) if not conversation_id else conversation_id,
+                response="I apologize, but I encountered an internal error processing your request.",
+                conversation_title=None
             )
-    
-    def _get_filtered_table_info(self, db: Any) -> str:
-        """Get filtered table information from the database.
-        
-        Args:
-            db: Database instance
-            
-        Returns:
-            Formatted string with table information
-        """
-        try:
-            # Get table information from the database
-            tables_with_isolation = []
-            
-            # For each table in the database, check if it has company isolation
-            for table_name in db.get_usable_table_names():
-                if table_name.lower() in COMPANY_ISOLATION_MAPPING:
-                    tables_with_isolation.append(table_name)
-            
-            # Get table schema information
-            table_info = []
-            for table_name in tables_with_isolation:
-                columns = db.get_table_info(table_names=[table_name])
-                # Format the table information with indentation for better readability
-                formatted_columns = "  - " + "\n  - ".join(
-                    [col.strip() for col in columns.split(",")]
-                )
-                table_info.append(f"Table: {table_name}\nColumns:\n{formatted_columns}\n")
-            
-            return "\n".join(table_info)
-        except Exception as e:
-            logger.error(f"Error getting filtered table info: {str(e)}")
-            return "Table information not available"
     
     async def generate_visualization(
         self, 
@@ -241,159 +314,189 @@ but you should still be aware of this restriction when writing your queries.
         visualization_type: Optional[str] = None,
         session: Optional[Session] = None
     ) -> VisualizationResult:
-        """Generate visualization based on SQL query results.
+        """Generate visualization from data.
         
         Args:
-            query: Visualization query in natural language
-            company_id: Company ID for data isolation
+            query: Visualization query
+            company_id: Company ID
             user_id: User ID
-            visualization_type: Optional visualization type (bar, line, pie, etc.)
+            visualization_type: Optional visualization type
             session: Optional database session
             
         Returns:
             Visualization result
         """
+        # Initialize LLM
+        llm = get_llm()
+        
+        # Create SQL database with company isolation
+        sql_database = get_company_isolated_sql_database(
+            company_id=company_id,
+            sample_rows_in_table_info=3
+        )
+        
+        # Create SQL toolkit
+        toolkit = SQLDatabaseToolkit(
+            db=sql_database,
+            llm=llm
+        )
+        
+        # Add custom tools for schema exploration
+        list_tables_tool = Tool(
+            name="List_Database_Tables",
+            description="Lists all tables in the database to understand what data is available",
+            func=lambda _: self.mcp_mysql_tool.list_tables(company_id)
+        )
+        
+        get_table_schema_tool = Tool(
+            name="Get_Table_Schema",
+            description="Gets detailed schema information for a specific table including column names, types, and isolation information",
+            func=lambda table_name: self.mcp_mysql_tool.get_table_schema(table_name, company_id)
+        )
+        
+        # Add custom tools to the toolkit
+        toolkit.get_tools().extend([list_tables_tool, get_table_schema_tool])
+        
+        # Create agent executor
+        agent_executor = create_sql_agent(
+            llm=llm,
+            toolkit=toolkit,
+            verbose=True,
+            agent_type="openai-tools",
+            handle_parsing_errors=True
+        )
+        
+        # Modify the query to explicitly ask for SQL to generate visualization
+        sql_query_prompt = f"Write a SQL query to get data for: {query}. Only return the SQL query, no explanations."
+        
         try:
-            # Verify token usage
-            if session:
-                result = session.execute(text("""
-                    SELECT u.ai_agent_tokens_used, p.ai_agent_default_tokens
-                    FROM users u
-                    JOIN plans p ON u.plan = p.id
-                    WHERE u.id = :company_id AND p.ai_agent_enabled = 1
-                """), {
-                    "company_id": company_id
-                }).fetchone()
-                
-                if not result:
-                    logger.warning(f"Could not retrieve token/plan info for company_id: {company_id} for visualization.")
-                    return VisualizationResult(
-                        data=None,
-                        explanation="Could not verify AI Agent access or plan status."
-                    )
-                
-                tokens_used, tokens_allocated = result
-                tokens_remaining = tokens_allocated - tokens_used
-
-                # Check specifically for visualization token cost
-                visualization_token_cost = 2 # Assume higher cost
-                if tokens_remaining < visualization_token_cost:
-                    logger.info(f"Company {company_id} has insufficient tokens ({tokens_remaining}) for visualization (cost: {visualization_token_cost}).")
-                    return VisualizationResult(
-                        data=None,
-                        explanation=f"You need at least {visualization_token_cost} tokens for visualization, but only have {tokens_remaining} left."
-                    )
+            # First get SQL query
+            response = await agent_executor.ainvoke({"input": sql_query_prompt})
+            sql_query = self._extract_sql_query(response.get("output", ""))
             
-            # Create company-isolated SQLDatabase instance
-            db = get_company_isolated_sql_database(company_id)
+            if not sql_query:
+                return VisualizationResult(
+                    data=None,
+                    explanation="Could not generate a SQL query for this visualization request."
+                )
             
-            # Create LLM
-            llm = get_llm()
+            # Execute the SQL query to get data
+            data = sql_database.run(sql_query)
             
-            # Get database schema details for the system prompt
-            tables_info = self._get_filtered_table_info(db)
-            
-            # Build a prompt for SQL query generation specifically for visualization
-            system_prompt = f"""
-You are an SQL expert helping generate visualizations from database data.
-You need to write a SQL query that will provide the necessary data for creating a visualization.
-
-# CRITICAL DATA PRIVACY REQUIREMENTS:
-EXTREMELY IMPORTANT: You must ONLY access data that belongs to the company with ID {company_id}.
-
-# DATABASE STRUCTURE:
-Here are the key tables you have access to:
-
-{tables_info}
-
-# DATA ISOLATION ENFORCEMENT:
-All your queries will be automatically modified to include company filters (e.g., "WHERE created_by = {company_id}"), 
-but you should still be aware of this restriction when writing your queries.
-
-# VISUALIZATION GUIDANCE:
-For a {visualization_type or 'suitable'} visualization, focus on:
-1. Selecting the right columns that can be visualized effectively
-2. Using aggregation functions (COUNT, SUM, AVG) when appropriate
-3. Including categories/dimensions for grouping
-4. Limiting the result to a reasonable number of data points (10-15 max)
-
-Write ONLY the SQL query, nothing else.
-"""
-            
-            # Create SQL query generation chain with the system prompt
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", system_prompt),
-                ("human", "{input}")
-            ])
-            
-            # Create SQL query generation chain
-            sql_chain = create_sql_query_chain(llm, db, prompt=prompt)
-            
-            # Generate SQL query
-            sql_query = await sql_chain.ainvoke({"input": query})
-            
-            logger.info(f"Generated SQL query for visualization: {sql_query}")
-            
-            # Execute the SQL query
-            result = db.run(sql_query)
-            
-            # Parse results into a format suitable for visualization
-            if isinstance(result, str):
-                try:
-                    # Try to parse if returned as string
-                    data = json.loads(result)
-                except:
-                    # If parsing fails, assume it's a formatted string representation
-                    logger.warning(f"Could not parse SQL result as JSON: {result}")
-                    return VisualizationResult(
-                        data=None,
-                        explanation=f"Failed to process data for visualization. Result: {result}"
-                    )
-            else:
-                # Convert result to dict/list structure for visualization
-                try:
-                    if hasattr(result, '_mapping'):  # SQLAlchemy row
-                        data = [dict(row._mapping) for row in result]
-                    else:
-                        data = result  # Assume it's already in a suitable format
-                except Exception as e:
-                    logger.error(f"Error converting SQL result to visualization data: {str(e)}")
-                    return VisualizationResult(
-                        data=None,
-                        explanation=f"Failed to convert data for visualization: {str(e)}"
-                    )
-            
-            # Generate visualization
-            visualization = await generate_visualization_from_data(
+            # Generate visualization from data
+            return await generate_visualization_from_data(
                 data=data,
                 query=query,
                 visualization_type=visualization_type,
                 llm=llm
             )
             
-            # Update token usage
-            tokens_to_consume = visualization_token_cost 
-            if session:
-                 update_success = await self._update_token_usage(
-                    session=session,
-                    company_id=company_id,
-                    tokens_used=tokens_to_consume
-                 )
-                 if not update_success:
-                     logger.error(f"Failed to update token usage for visualization for company {company_id}")
-
-            # Return visualization result including remaining tokens
-            final_tokens_remaining = await self._get_remaining_tokens(session, company_id)
-            visualization.tokens_remaining = final_tokens_remaining # Assuming VisualizationResult has this field
-
-            return visualization
-            
         except Exception as e:
             logger.error(f"Error generating visualization: {str(e)}")
             return VisualizationResult(
                 data=None,
-                explanation=f"I encountered an error while generating the visualization: {str(e)}. Please try again or rephrase your request."
+                explanation=f"Error generating visualization: {str(e)}"
             )
+    
+    async def perform_action(
+        self, 
+        action: str, 
+        parameters: Dict[str, Any], 
+        company_id: int, 
+        user_id: str,
+        session: Optional[Session] = None
+    ) -> ActionResult:
+        """SQL agent doesn't support actions.
+        
+        Args:
+            action: Action to perform
+            parameters: Action parameters
+            company_id: Company ID
+            user_id: User ID
+            session: Optional database session
+            
+        Returns:
+            Action result
+        """
+        return ActionResult(
+            success=False,
+            message="SQL agent doesn't support direct actions. Please use a specific query instead."
+        )
+    
+    def _extract_sql_query(self, text: str) -> Optional[str]:
+        """Extract SQL query from text.
+        
+        Args:
+            text: Text to extract SQL query from
+            
+        Returns:
+            SQL query if found, None otherwise
+        """
+        # Try to extract from code blocks
+        code_block_pattern = r"```sql(.*?)```"
+        matches = re.findall(code_block_pattern, text, re.DOTALL)
+        
+        if matches:
+            return matches[0].strip()
+        
+        # Try alternative code block format
+        alt_code_block_pattern = r"```(.*?)```"
+        matches = re.findall(alt_code_block_pattern, text, re.DOTALL)
+        
+        if matches:
+            for match in matches:
+                if match.strip().upper().startswith("SELECT"):
+                    return match.strip()
+        
+        # Look for SELECT statements
+        select_pattern = r"(SELECT\s+.+?FROM\s+.+?)(;|$)"
+        matches = re.findall(select_pattern, text, re.DOTALL | re.IGNORECASE)
+        
+        if matches:
+            return matches[0][0].strip()
+        
+        return None
+    
+    def _check_visualization_intent(self, message: str) -> tuple[bool, Optional[str]]:
+        """Check if the message has visualization intent.
+        
+        Args:
+            message: User message
+            
+        Returns:
+            Tuple of (has_visualization_intent, visualization_type)
+        """
+        message_lower = message.lower()
+        
+        # Keywords that suggest visualization intent
+        viz_keywords = [
+            "graph", "chart", "plot", "visualize", "visualization", "display",
+            "show me", "diagram", "histogram", "bar chart", "line graph",
+            "pie chart", "scatter plot"
+        ]
+        
+        # Chart type mapping
+        chart_types = {
+            "bar": ["bar chart", "bar graph", "column chart"],
+            "line": ["line chart", "line graph", "trend", "time series"],
+            "pie": ["pie chart", "pie graph", "donut", "distribution"],
+            "scatter": ["scatter plot", "scatter chart", "scatter graph"],
+            "radar": ["radar chart", "radar graph", "spider chart"],
+            "bubble": ["bubble chart", "bubble graph"]
+        }
+        
+        # Check for visualization intent
+        has_viz_intent = any(keyword in message_lower for keyword in viz_keywords)
+        
+        # Determine chart type
+        viz_type = None
+        if has_viz_intent:
+            for chart_type, keywords in chart_types.items():
+                if any(keyword in message_lower for keyword in keywords):
+                    viz_type = chart_type
+                    break
+        
+        return has_viz_intent, viz_type
     
     async def _get_conversation_history(
         self,
@@ -411,59 +514,122 @@ Write ONLY the SQL query, nothing else.
         Returns:
             List of conversation messages
         """
-        try:
-            # First check if the table exists
-            table_exists = session.execute(text("""
-                SELECT COUNT(*) 
-                FROM information_schema.tables 
-                WHERE table_name = 'agent_conversations'
-            """)).scalar() > 0
-            
-            if not table_exists:
-                return []
-            
-            # Retrieve conversation history
-            result = session.execute(text("""
-                SELECT message, response, created_at
-                FROM agent_conversations
-                WHERE conversation_id = :conversation_id
-                AND company_user_id = :company_id
-                ORDER BY created_at ASC
-            """), {
-                "conversation_id": conversation_id,
-                "company_id": company_id
-            }).fetchall()
-            
-            # Convert to list of dictionaries
-            conversation_history = []
-            for row in result:
-                conversation_history.append({
-                    "message": row[0],
-                    "response": row[1],
-                    "created_at": row[2]
-                })
-            
-            return conversation_history
-            
-        except Exception as e:
-            logger.error(f"Error retrieving conversation history: {str(e)}")
-            return [] 
+        # Use BaseAgent's implementation
+        return await super()._get_conversation_history(conversation_id, company_id, session)
 
     async def _get_remaining_tokens(self, session: Session, company_id: int) -> Optional[int]:
         """Helper to get the current remaining tokens."""
-        if not session:
-            return None
-        try:
-            result = session.execute(text("""
-                SELECT u.ai_agent_tokens_used, p.ai_agent_default_tokens
-                FROM users u
-                JOIN plans p ON u.plan = p.id
-                WHERE u.id = :company_id
-            """), {"company_id": company_id}).fetchone()
-            if result:
-                tokens_used, tokens_allocated = result
-                return max(0, tokens_allocated - tokens_used)
-            return None # User or plan not found
-        except Exception as e:
-            logger.error(f"Error fetching remaining tokens for company {company_id}: {e}")
-            return None 
+        # This method seems unused and token management is handled elsewhere.
+        # Consider removing or implementing if needed.
+        pass
+
+    async def _get_isolation_columns_info(self, company_id: int) -> Dict[str, str]:
+        """Get information about isolation columns for commonly used tables.
+        
+        Args:
+            company_id: The company ID
+            
+        Returns:
+            Dictionary mapping table names to their isolation columns
+        """
+        # List of commonly used tables to get isolation info for
+        common_tables = [
+            "employees", "users", "departments", "projects", "tasks", 
+            "customers", "invoices", "products", "leads", "deals",
+            "expenses", "payments", "orders", "leaves", "attendance_employees"
+        ]
+        
+        isolation_info = {}
+        engine = DatabaseConnection.create_engine()
+        
+        for table in common_tables:
+            # Use the existing function to get the isolation column
+            isolation_column = get_company_isolation_column(table, engine)
+            if isolation_column:
+                isolation_info[table] = isolation_column
+        
+        return isolation_info
+    
+    def _format_isolation_instructions(self, isolation_info: Dict[str, str], company_id: int) -> str:
+        """Format isolation information into clear instructions for the LLM.
+        
+        Args:
+            isolation_info: Dictionary mapping table names to isolation columns
+            company_id: The company ID to use in filters
+            
+        Returns:
+            Formatted instruction string
+        """
+        instructions = []
+        
+        for table, column in isolation_info.items():
+            instructions.append(f"- Table '{table}': MUST include WHERE {table}.{column} = {company_id}")
+        
+        # Add generic instruction for tables not specifically listed
+        instructions.append(f"- For ANY table not listed above: Check if it has columns like 'created_by', 'company_id', or 'user_id' and include the appropriate filter")
+        
+        # Join with newlines for readability in the prompt
+        return "\n".join(instructions)
+    
+    def _clean_response_for_end_user(self, response: str) -> str:
+        """Clean the response by removing SQL code blocks and technical details.
+        
+        Args:
+            response: The raw response from the agent
+            
+        Returns:
+            Cleaned response suitable for end users
+        """
+        # Remove SQL code blocks (```sql...```)
+        response = re.sub(r'```sql.*?```', '', response, flags=re.DOTALL)
+        
+        # Remove any remaining code blocks
+        response = re.sub(r'```.*?```', '', response, flags=re.DOTALL)
+        
+        # Remove SQL-like statements
+        response = re.sub(r'SELECT.*?FROM.*?;', '', response, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Remove references to SQL or query execution
+        response = re.sub(r'(executing|running|using|writing)(\s+the)?\s+query', 'checking', response, flags=re.IGNORECASE)
+        response = re.sub(r'(the\s+)?(sql|database)\s+(query|results?|tables?|columns?)', 'the data', response, flags=re.IGNORECASE)
+        
+        # Replace multiple newlines with double newlines for readability
+        response = re.sub(r'\n{3,}', '\n\n', response)
+        
+        # Trim extra whitespace
+        response = response.strip()
+        
+        return response
+
+    async def _generate_conversation_title(
+        self,
+        conversation_id: str,
+        company_id: int,
+        user_message: str,
+        agent_response: str
+    ) -> str:
+        """Generate a title for the conversation based on the user's message and the agent's response.
+        
+        Args:
+            conversation_id: Conversation ID
+            company_id: Company ID
+            user_message: User's original message
+            agent_response: Agent's response
+            
+        Returns:
+            Generated conversation title
+        """
+        # Extract keywords from the user's message and the agent's response
+        user_keywords = re.findall(r'\b\w+\b', user_message.lower())
+        agent_keywords = re.findall(r'\b\w+\b', agent_response.lower())
+        
+        # Combine keywords into a single string
+        all_keywords = user_keywords + agent_keywords
+        
+        # Generate a title based on the keywords
+        title = " ".join(all_keywords[:5])  # Take the first 5 words
+        
+        # Add company ID to the title
+        title += f" - {company_id}"
+        
+        return title 

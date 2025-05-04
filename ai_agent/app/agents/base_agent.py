@@ -7,14 +7,16 @@ import uuid
 from sqlalchemy import text
 
 from app.core.config import settings
+from app.core.llm import get_llm
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 class AgentResponse(BaseModel):
     """Agent response model."""
-    message: str = Field(..., description="Response message")
+    response: str = Field(..., description="Agent's response message")
     conversation_id: str = Field(..., description="Conversation ID")
+    conversation_title: Optional[str] = Field(None, description="Title generated for the conversation")
     visualization: Optional[Dict[str, Any]] = Field(None, description="Optional visualization data")
     tokens_remaining: Optional[int] = Field(None, description="Tokens remaining after this interaction")
     tokens_used: Optional[int] = Field(None, description="Tokens consumed in this interaction")
@@ -98,9 +100,10 @@ class BaseAgent(ABC):
         message: str,
         response: str,
         agent_type: str,
-        tokens_used: int = 1
+        tokens_used: int = 1,
+        title: Optional[str] = None
     ) -> None:
-        """Save conversation to database.
+        """Save conversation to database, generating a title if needed.
         
         Args:
             session: Database session
@@ -111,9 +114,11 @@ class BaseAgent(ABC):
             response: Agent response
             agent_type: Agent type
             tokens_used: Tokens used
+            title: Optional title (if provided, used; otherwise generated if needed)
         """
         try:
-            # Check if table exists, create if not
+            # Check if table exists, create if not (this part is potentially inefficient)
+            # Consider moving the CREATE TABLE to an initialization step if possible
             session.execute(text("""
                 CREATE TABLE IF NOT EXISTS agent_conversations (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -124,18 +129,39 @@ class BaseAgent(ABC):
                     response TEXT NOT NULL,
                     agent_type VARCHAR(50) NOT NULL,
                     tokens_used INT DEFAULT 1,
+                    title VARCHAR(255) NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     INDEX (conversation_id),
                     INDEX (company_user_id),
                     INDEX (user_id)
                 )
             """))
-            
-            # Insert conversation
+
+            final_title = title # Use provided title if available
+
+            # Check if a title needs to be generated (only if no title provided AND it's the first message)
+            if final_title is None:
+                first_message_check = session.execute(text("""
+                    SELECT id FROM agent_conversations 
+                    WHERE conversation_id = :conversation_id LIMIT 1
+                """), {"conversation_id": conversation_id}).scalar()
+                
+                if first_message_check is None: # It's the first message
+                    try:
+                        llm = get_llm() # Get LLM instance
+                        prompt = f"Generate a concise title (max 5 words) for a conversation starting with:\nUser: {message}\nAgent: {response}\nTitle:"
+                        title_response = await llm.ainvoke(prompt)
+                        final_title = title_response.content.strip().strip('"\'')[:255] # Extract, clean, and truncate
+                        logger.info(f"Generated title for conversation {conversation_id}: {final_title}")
+                    except Exception as title_gen_error:
+                        logger.error(f"Failed to generate title for conversation {conversation_id}: {title_gen_error}")
+                        final_title = message[:50] + "..." # Fallback title
+
+            # Insert conversation with the final title (either provided, generated, or fallback)
             session.execute(text("""
                 INSERT INTO agent_conversations 
-                (conversation_id, company_user_id, user_id, message, response, agent_type, tokens_used)
-                VALUES (:conversation_id, :company_user_id, :user_id, :message, :response, :agent_type, :tokens_used)
+                (conversation_id, company_user_id, user_id, message, response, agent_type, tokens_used, title)
+                VALUES (:conversation_id, :company_user_id, :user_id, :message, :response, :agent_type, :tokens_used, :title)
             """), {
                 "conversation_id": conversation_id,
                 "company_user_id": company_id,
@@ -143,7 +169,8 @@ class BaseAgent(ABC):
                 "message": message,
                 "response": response,
                 "agent_type": agent_type,
-                "tokens_used": tokens_used
+                "tokens_used": tokens_used,
+                "title": final_title # Use the determined title
             })
             
             session.commit()
@@ -205,6 +232,27 @@ class BaseAgent(ABC):
         except Exception as e:
             logger.error(f"Error retrieving conversation history: {str(e)}")
             return []
+
+    async def get_conversation_messages(self, session: Session, conversation_id: str, company_id: int) -> List[Dict[str, str]]:
+        """Retrieve all messages for a specific conversation."""
+        try:
+            result = session.execute(text("""
+                SELECT message, response, agent_type, created_at
+                FROM agent_conversations
+                WHERE conversation_id = :conversation_id
+                AND company_user_id = :company_id
+                ORDER BY created_at ASC
+            """), {"conversation_id": conversation_id, "company_id": company_id}).fetchall()
+            
+            messages = []
+            for row in result:
+                messages.append({"role": "user", "content": row[0], "timestamp": str(row[3])})
+                messages.append({"role": "agent", "content": row[1], "timestamp": str(row[3]), "agent_type": row[2]})
+
+            return messages
+        except Exception as e:
+            logger.error(f"Error fetching messages for conversation {conversation_id}: {e}")
+            return [] # Return empty list on error
     
     async def _update_token_usage(
         self,
