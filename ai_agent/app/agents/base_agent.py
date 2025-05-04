@@ -23,9 +23,9 @@ class AgentResponse(BaseModel):
 
 class VisualizationResult(BaseModel):
     """Visualization result model."""
-    data: Optional[Dict[str, Any]] = Field(None, description="Visualization data")
-    explanation: str = Field(..., description="Explanation of the visualization")
-    tokens_remaining: Optional[int] = Field(None, description="Tokens remaining after this interaction")
+    data: Optional[Dict[str, Any]] = Field(None, description="Chart.js compatible data structure")
+    explanation: Optional[str] = Field(None, description="Natural language explanation of the visualization")
+    tokens_used: int = Field(2, description="Tokens consumed during the visualization generation step - fixed at 2 for simplicity")
 
 class ActionResult(BaseModel):
     """Action result model."""

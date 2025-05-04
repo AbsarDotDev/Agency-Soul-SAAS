@@ -243,15 +243,30 @@ IMPORTANT TABLE USAGE RULES:
 2. Only use the `employees` table if the query specifically asks for employee-specific details (like salary, department, designation, hire date, etc.).
 3. Common join for project members: `projects` -> `project_users` -> `users`.
 
+VISUALIZATION RULES:
+1. If the user asks to "visualize", "chart", "plot", or "graph" data, first generate the SQL query and get the results.
+2. Formulate your natural language response explaining the findings.
+3. **CRITICAL:** After your text response, if visualization was requested, add a separate JSON block containing the raw data suitable for charting. Format it like this:
+```json
+{{{{  # Escaped double curly braces
+  "visualization_data": [
+    {{{{ "label": "Category1", "value": 10 }}}}, # Escaped double curly braces
+    {{{{ "label": "Category2", "value": 25 }}}}  # Escaped double curly braces
+    // ... more data points ...
+  ]
+}}}} # Escaped double curly braces
+```
+Replace "label" and "value" with appropriate keys based on the query results (e.g., "department", "count"; "month", "sales"; "status", "project_count"). Include ALL relevant data points.
+
 RESPONSE GUIDELINES:
-1. Always use natural, conversational language
-2. Explain insights in business terms, not database terms
-3. Present numerical results in a readable format
-4. Keep responses friendly and helpful
+1. Always use natural, conversational language for the main text response.
+2. Explain insights in business terms, not database terms.
+3. Present numerical results readably in the text.
+4. Keep responses friendly and helpful.
 
 TECHNICAL RULES:
 1. Write SQL compatible with MySQL 5.7
-2. Only use SELECT statements (no INSERT, UPDATE, DELETE, etc.)
+2. Only use SELECT statements.
 3. When joining tables, ensure proper join conditions AND company isolation for ALL tables.
 """
 
@@ -275,39 +290,137 @@ TECHNICAL RULES:
                 # We use ainvoke which returns a richer dictionary than arun
                 agent_result = await agent_executor.ainvoke({"input": message})
                 
-                # Extract the final answer and potential token usage
+                # Extract the final answer
                 agent_final_answer = agent_result.get("output", "Sorry, I could not process that.")
                 
-                # --- Attempt to get token usage (adapt based on actual LLM/agent output structure) ---
-                # Example: Check common keys where token info might be stored
-                # You might need to inspect the actual 'agent_result' dict structure
-                # from your specific LLM provider (Gemini, OpenAI) to find the exact keys.
-                llm_output = agent_result.get("llm_output", {}) # Or similar key if agent provides it
-                if llm_output and isinstance(llm_output, dict):
-                     # Example for OpenAI structure (adapt for Gemini if different)
-                     usage_metadata = llm_output.get("token_usage", {}) 
-                     if isinstance(usage_metadata, dict):
-                          tokens_used_in_request = usage_metadata.get("total_tokens", 1) # Default to 1 if not found
-                
-                if tokens_used_in_request == 0:
-                     # Fallback if LLM didn't provide usage, estimate based on message length?
-                     # Or set a default minimum cost
-                     tokens_used_in_request = max(1, len(message.split()) // 10) # Simple estimate
-                     logger.warning(f"Could not determine exact token usage from LLM for company {company_id}. Estimated: {tokens_used_in_request}")
-                else:
-                     logger.info(f"Tokens used by LLM for company {company_id}: {tokens_used_in_request}")
+                # Estimate tokens used by the main agent chain (Langchain SQL agent doesn't easily exposes this)
+                # We can estimate based on input/output or integrate a callback handler later if precise count is needed
+                # For now, let's use a basic estimate or assume 0 until a better method is found
+                main_agent_tokens_used = 0 # Placeholder - needs improvement
+                logger.warning("Token usage for main SQL agent chain is currently estimated as 0.")
 
-                cleaned_response = self._clean_response_for_end_user(agent_final_answer)
+                # --- Extract Visualization Data and Clean Text Response ---
+                visualization_chart_data = None
+                visualization_tokens_used = 0 # Initialize viz tokens
+                text_response_part = agent_final_answer # Default to full answer
+                
+                # Regex to find the specific JSON block for visualization - more robust
+                # Handles variations in whitespace around ```json and the { character, and case-insensitivity for 'json'
+                viz_json_match = re.search(
+                    r"```(?:json)?\s*(\{\s*\"visualization_data\":.*?\})\s*```", 
+                    agent_final_answer, 
+                    re.DOTALL | re.IGNORECASE
+                )
+                
+                # First try to extract structured visualization data
+                if viz_json_match:
+                    # Extract group 1 which contains the JSON object itself
+                    json_string = viz_json_match.group(1).strip() 
+                    try:
+                        # Parse the extracted JSON string
+                        viz_payload = json.loads(json_string)
+                        raw_viz_data = viz_payload.get("visualization_data")
+                        
+                        if raw_viz_data and isinstance(raw_viz_data, list):
+                            logger.info(f"Extracted raw visualization data: {raw_viz_data}")
+                            # Determine visualization type
+                            viz_keywords, requested_type = self._check_visualization_intent(message)
+                            
+                            # Generate Chart.js compatible data
+                            viz_result: VisualizationResult = await generate_visualization_from_data(
+                                data=raw_viz_data, 
+                                query=message, 
+                                visualization_type=requested_type,
+                                llm=llm 
+                            )
+                            visualization_chart_data = viz_result.data
+                            # Fixed token usage for visualization as requested - always use 2 tokens for visualizations
+                            visualization_tokens_used = 2
+                            logger.info(f"Visualization step used {visualization_tokens_used} tokens.")
+                            
+                            # Remove the JSON block from the text response shown to the user
+                            text_response_part = agent_final_answer[:viz_json_match.start()].strip()
+                            logger.info(f"Cleaned text response part: {text_response_part}")
+                        else:
+                            logger.warning("Found viz block, but 'visualization_data' key missing or not a list.")
+                            
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse visualization JSON block: {e}. JSON string: {json_string}")
+                    except Exception as viz_e:
+                         logger.error(f"Error processing visualization data: {viz_e}", exc_info=True)
+                else:
+                    # Try to detect visualization intent directly from the message
+                    has_viz_intent, viz_type = self._check_visualization_intent(message)
+                    
+                    if has_viz_intent:
+                        logger.info(f"No visualization JSON block found, but visualization intent detected. Trying direct visualization.")
+                        try:
+                            # Try to extract table data from the LLM response
+                            # This looks for patterns like "Department: 5 employees" or "IT: 10, HR: 5"
+                            data_points = []
+                            
+                            # Pattern 1: Look for "Category: Number" patterns
+                            pattern1 = r'(\w+):\s*(\d+)'
+                            matches = re.findall(pattern1, agent_final_answer)
+                            if matches:
+                                for category, value in matches:
+                                    data_points.append({"label": category, "value": int(value)})
+                            
+                            # Pattern 2: Look for bullet points with numbers
+                            pattern2 = r'[•\*-]\s*\*\*([^:]+)\*\*:\s*(\d+)'
+                            matches = re.findall(pattern2, agent_final_answer)
+                            if matches:
+                                for category, value in matches:
+                                    data_points.append({"label": category.strip(), "value": int(value)})
+                            
+                            # If data points were found, generate visualization
+                            if data_points:
+                                logger.info(f"Extracted {len(data_points)} data points from text response for visualization: {data_points}")
+                                viz_result: VisualizationResult = await generate_visualization_from_data(
+                                    data=data_points,
+                                    query=message,
+                                    visualization_type=viz_type,
+                                    llm=llm
+                                )
+                                visualization_chart_data = viz_result.data
+                                visualization_tokens_used = 2
+                                logger.info(f"Created visualization from extracted data points.")
+                            else:
+                                logger.info("No visualization JSON block found and couldn't extract data points from text.")
+                        except Exception as e:
+                            logger.error(f"Error attempting fallback visualization generation: {e}", exc_info=True)
+                    else:
+                         logger.info("No visualization JSON block found in agent output and no visualization intent detected.")
+                
+                # Ensure options is always an object, never an array
+                if visualization_chart_data and 'options' in visualization_chart_data:
+                    if visualization_chart_data['options'] is None or (
+                        isinstance(visualization_chart_data['options'], list) and 
+                        len(visualization_chart_data['options']) == 0
+                    ):
+                        visualization_chart_data['options'] = {}
+
+                # --- Calculate Total Token Usage ---
+                # Always use 1 token for main agent plus visualization tokens
+                main_agent_tokens_used = 1
+                total_tokens_used = main_agent_tokens_used + visualization_tokens_used
+                logger.info(f"Total tokens used for request: {total_tokens_used}")
+
+                # Clean the final text response part
+                cleaned_response = self._clean_response_for_end_user(text_response_part)
 
                 # --- Update token count in DB ---
+                tokens_remaining_after = None # Initialize
                 if session:
-                    token_update_success = await self._update_token_usage(session, company_id, tokens_used_in_request)
+                    # Use the *total* tokens used
+                    token_update_success = await self._update_token_usage(session, company_id, total_tokens_used)
                     if token_update_success:
                          tokens_remaining_after = await TokenManager.get_token_count(company_id, session)
+                         logger.info(f"Tokens updated. Remaining for company {company_id}: {tokens_remaining_after}")
                     else:
                          logger.error(f"Failed to update token usage for company {company_id} in database.")
-                         # Handle appropriately - maybe return error or proceed with null remaining tokens?
-                         # For now, we proceed but tokens_remaining might be inaccurate.
+                         # Fetch current count even if update failed, for informational purposes
+                         tokens_remaining_after = await TokenManager.get_token_count(company_id, session)
 
                 # --- Save Conversation ---
                 conversation_title = await self._generate_conversation_title(
@@ -322,37 +435,44 @@ TECHNICAL RULES:
                         message=message,
                         response=cleaned_response,
                         agent_type=self.type,
-                        tokens_used=tokens_used_in_request, # Save actual/estimated usage
-                        title=conversation_title # Pass the generated title
+                        tokens_used=total_tokens_used, # Save the total tokens used
+                        title=conversation_title 
                     )
 
                 # --- Return Final Response ---
                 return AgentResponse(
                     conversation_id=conversation_id,
-                    response=cleaned_response,
+                    response=cleaned_response,             
                     conversation_title=conversation_title,
-                    tokens_used=tokens_used_in_request,
-                    tokens_remaining=tokens_remaining_after 
+                    tokens_used=total_tokens_used, # Return the total
+                    tokens_remaining=tokens_remaining_after,
+                    visualization=visualization_chart_data
                 )
 
             except Exception as e:
                 logger.error(f"Agent execution or processing error: {str(e)}", exc_info=True)
-                # Ensure error responses also conform to the model structure
+                # Ensure total_tokens_used is defined even in error paths for the return model
+                total_tokens_used = 0 
+                tokens_remaining_after = await TokenManager.get_token_count(company_id, session) if session else None
                 return AgentResponse(
-                    conversation_id=conversation_id or str(uuid.uuid4()), # Generate if needed
+                    conversation_id=conversation_id or str(uuid.uuid4()),
                     response=f"I encountered an error processing your request. Details: {str(e)}",
                     conversation_title=None,
-                    tokens_used=0, # No tokens used if error occurred before/during execution
-                    tokens_remaining=await TokenManager.get_token_count(company_id, session) if session else None # Show current count if possible
+                    tokens_used=total_tokens_used, # Use 0 on error
+                    tokens_remaining=tokens_remaining_after,
+                    visualization=None 
                 )
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}", exc_info=True)
+            total_tokens_used = 0
+            tokens_remaining_after = await TokenManager.get_token_count(company_id, session) if session else None
             return AgentResponse(
                 conversation_id=str(uuid.uuid4()) if not conversation_id else conversation_id,
                 response="I apologize, but I encountered an internal error processing your request.",
                 conversation_title=None,
-                tokens_used=0,
-                tokens_remaining=await TokenManager.get_token_count(company_id, session) if session else None
+                tokens_used=total_tokens_used,
+                tokens_remaining=tokens_remaining_after,
+                visualization=None
             )
     
     async def generate_visualization(

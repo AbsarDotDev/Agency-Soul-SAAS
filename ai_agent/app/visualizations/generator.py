@@ -6,9 +6,11 @@ import numpy as np
 import base64
 from io import BytesIO
 from typing import Dict, Any, List, Optional, Union, Tuple
+import re
 
 from app.agents.base_agent import VisualizationResult
-from app.core.llm import get_llm
+from app.core.llm import get_llm, get_embedding_model
+from app.core.token_manager import TokenManager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -28,7 +30,7 @@ async def generate_visualization_from_data(
         llm: Optional LLM instance (will be created if not provided)
         
     Returns:
-        VisualizationResult with chart data and explanation
+        VisualizationResult including chart data, explanation, and tokens used.
     """
     if llm is None:
         llm = get_llm()
@@ -37,7 +39,8 @@ async def generate_visualization_from_data(
     if not data:
         return VisualizationResult(
             data=None,
-            explanation="No data available for visualization."
+            explanation="No data available for visualization.",
+            tokens_used=0
         )
     
     try:
@@ -59,19 +62,31 @@ async def generate_visualization_from_data(
         if df.empty:
             return VisualizationResult(
                 data=None,
-                explanation="No data available for visualization."
+                explanation="No data available for visualization.",
+                tokens_used=0
             )
         
         # Try LLM-based visualization generation first
+        visualization_tokens = 0
         try:
             llm_result = await _generate_visualization_with_llm(df, query, visualization_type, llm)
-            if llm_result and llm_result.get('data'):
+            if llm_result and llm_result.data and llm_result.tokens_used > 0:
                 return llm_result
+            elif llm_result:
+                logger.warning(f"LLM visualization call succeeded but returned no data or tokens. Falling back.")
+                visualization_tokens = llm_result.tokens_used
+            else:
+                logger.warning(f"LLM visualization call succeeded but returned no data or tokens. Falling back.")
+                visualization_tokens = 0
         except Exception as e:
             logger.warning(f"LLM visualization generation failed: {str(e)}. Falling back to direct generation.")
+            pass
         
-        # If LLM-based generation fails, use direct visualization generation
-        return _generate_visualization_directly(df, query, visualization_type)
+        # If LLM-based generation fails or doesn't return data, use direct visualization generation
+        logger.info("Falling back to direct visualization generation.")
+        direct_result = _generate_visualization_directly(df, query, visualization_type)
+        direct_result.tokens_used += visualization_tokens
+        return direct_result
     
     except Exception as e:
         logger.error(f"Error in visualization generation: {str(e)}")
@@ -84,7 +99,7 @@ async def _generate_visualization_with_llm(
     visualization_type: Optional[str] = None,
     llm=None
 ) -> VisualizationResult:
-    """Generate visualization using LLM.
+    """Generate visualization using LLM and track tokens.
     
     Args:
         df: DataFrame with data to visualize
@@ -93,132 +108,141 @@ async def _generate_visualization_with_llm(
         llm: LLM instance
         
     Returns:
-        VisualizationResult
+        VisualizationResult including tokens used by this LLM call.
     """
-    # Convert DataFrame to JSON for prompt
-    # Limit to first 20 rows to avoid token limits
     data_json = df.head(20).to_json(orient='records')
     
-    # Create a prompt for visualization data generation
+    # Simplified prompt focusing *only* on the JSON output structure
     system_prompt = f"""
-    You are an expert data visualizer. Based on the provided data and the user's question,
-    generate a visualization specification that best presents the data to answer the question.
-    
-    The data is: {data_json}
-    
-    The user wants to visualize: {query}
-    
-    Create a chart specification in JSON format following this structure:
+CONTEXT:
+User query: "{query}"
+Data (first 20 rows JSON): {data_json}
+Requested chart type (if any): {visualization_type or 'auto-detect'}
+
+TASK:
+Generate ONLY the JSON specification for a Chart.js chart based on the context. 
+Adhere STRICTLY to this JSON structure:
+{{
+  "chart_type": "bar|line|pie|scatter|radar|bubble",
+  "title": "Concise chart title reflecting query",
+  "labels": ["Label1", "Label2", ...],
+  "datasets": [
     {{
-      "chart_type": "bar|line|pie|scatter|radar|bubble",
-      "title": "Chart title based on query",
-      "labels": ["Label1", "Label2", ...],
-      "datasets": [
-        {{
-          "label": "Dataset Label",
-          "data": [value1, value2, ...],
-          "backgroundColor": "color code(s)"
-        }}
-      ],
-      "options": {{
-        "scales": {{
-          "y": {{
-            "title": "Y-axis label"
-          }},
-          "x": {{
-            "title": "X-axis label"
-          }}
-        }}
-      }}
+      "label": "Dataset Label", 
+      "data": [value1, value2, ...],
+      "backgroundColor": ["rgba(R,G,B,0.7)", ...]
     }}
+  ],
+  "options": {{ 
+    "scales": {{ "y": {{ "title": "Y-axis label" }}, "x": {{ "title": "X-axis label" }} }}
+  }}
+}}
+
+IMPORTANT: The "options" field must ALWAYS be an OBJECT ({{ }}), NEVER an array ([ ]). 
+For pie charts, you can use empty options: "options": {{ }} but never "options": []
+
+OUTPUT:
+Return ONLY the valid JSON object. Do not include explanations or any text outside the JSON structure.
+"""
     
-    Also include a separate explanation of what the visualization shows.
+    # Use fixed token count (2) for visualization as requested
+    tokens_used = 2
     
-    Return a valid JSON object with these keys:
-    {{
-      "chart": Chart specification as above,
-      "explanation": "Text explanation of what the visualization shows"
-    }}
-    """
-    
-    if visualization_type:
-        system_prompt += f"\nThe user has specifically requested a {visualization_type} chart."
-    
-    # Generate visualization data using the LLM
     try:
+        # We still count tokens for debugging, but we'll return fixed value
+        prompt_tokens = TokenManager.count_tokens(system_prompt)
+        
+        logger.info("Invoking LLM for visualization refinement...")
         response = await llm.ainvoke(system_prompt)
+        response_text = response.content if hasattr(response, 'content') else str(response)
+        logger.info(f"LLM visualization response raw: {response_text[:500]}...")
         
-        # Extract the JSON from the response
-        response_text = response.content if hasattr(response, 'content') else response
+        completion_tokens = TokenManager.count_tokens(response_text)
+        # Log actual usage for debugging but return fixed value
+        logger.info(f"LLM visualization call token usage: prompt={prompt_tokens}, completion={completion_tokens}, total={prompt_tokens + completion_tokens} (fixed value: {tokens_used})")
         
-        # Parse the JSON response
+        # --- More Robust JSON Parsing --- 
+        chart_data = None
+        explanation = "Visualization generated based on data."
+        parsed_json = None
+        
+        # Clean potential markdown fences first
+        response_text_cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", response_text.strip(), flags=re.IGNORECASE)
+
         try:
-            result = json.loads(response_text)
-            
-            # Extract the visualization data and explanation
-            chart_data = result.get("chart", {})
-            explanation = result.get("explanation", "No explanation provided.")
-            
+            # Attempt 1: Parse the cleaned response directly
+            parsed_json = json.loads(response_text_cleaned)
+            if isinstance(parsed_json, dict) and "chart_type" in parsed_json:
+                chart_data = parsed_json
+                
+                # Ensure options is always an object, never an array
+                if "options" in chart_data:
+                    if chart_data["options"] is None or (isinstance(chart_data["options"], list) and len(chart_data["options"]) == 0):
+                        chart_data["options"] = {}
+                else:
+                    chart_data["options"] = {}
+                
+                logger.info("Successfully parsed cleaned LLM response as chart JSON.")
+            else:
+                logger.warning("Parsed JSON from LLM response doesn't match expected chart structure.")
+                # Handle potential {chart:..., explanation:...} structure if prompt ignored
+                if isinstance(parsed_json, dict) and "chart" in parsed_json:
+                    chart_data = parsed_json.get("chart")
+                    
+                    # Ensure options is always an object here too
+                    if "options" in chart_data:
+                        if chart_data["options"] is None or (isinstance(chart_data["options"], list) and len(chart_data["options"]) == 0):
+                            chart_data["options"] = {}
+                    else:
+                        chart_data["options"] = {}
+                        
+                    explanation = parsed_json.get("explanation", explanation)
+                    logger.info("Extracted chart/explanation from unexpected LLM response structure.")
+        
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse cleaned LLM response as JSON: {e}. Original response may have had issues.")
+            # No further extraction attempts needed as markdown was pre-cleaned
+
+        # --- Final check and return --- 
+        if chart_data and isinstance(chart_data, dict) and 'chart_type' in chart_data and 'labels' in chart_data and 'datasets' in chart_data:
+            # Validate essential keys further if needed
             return VisualizationResult(
                 data=chart_data,
-                explanation=explanation
+                explanation=explanation,
+                tokens_used=tokens_used
             )
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parsing LLM response as JSON: {str(e)}")
-            
-            # Try to extract JSON from the response text
-            start_idx = response_text.find("{")
-            end_idx = response_text.rfind("}")
-            
-            if start_idx >= 0 and end_idx > start_idx:
-                json_str = response_text[start_idx:end_idx + 1]
-                try:
-                    result = json.loads(json_str)
-                    chart_data = result.get("chart", {})
-                    explanation = result.get("explanation", "No explanation provided.")
-                    
-                    return VisualizationResult(
-                        data=chart_data,
-                        explanation=explanation
-                    )
-                except:
-                    pass
-            
-            # If JSON extraction fails, raise exception to trigger direct visualization
-            raise ValueError("Failed to parse LLM response as JSON")
-    
+        else:
+            logger.error("Failed to obtain valid chart JSON from LLM response after parsing attempts.")
+            # Return tokens used even on failure, but no chart data
+            return VisualizationResult(data=None, explanation="Could not generate visualization details.", tokens_used=tokens_used)
+
     except Exception as e:
-        logger.error(f"Error in LLM visualization generation: {str(e)}")
-        raise
+        logger.error(f"Exception during LLM visualization invoke/parsing: {str(e)}", exc_info=True)
+        # Return fixed token count even on error
+        return VisualizationResult(data=None, explanation=f"Error generating visualization details: {str(e)}", tokens_used=tokens_used)
 
 def _generate_visualization_directly(
     df: pd.DataFrame,
     query: str,
     visualization_type: Optional[str] = None
 ) -> VisualizationResult:
-    """Generate visualization directly from DataFrame.
-    
-    Args:
-        df: DataFrame with data to visualize
-        query: User query
-        visualization_type: Optional visualization type
-        
-    Returns:
-        VisualizationResult
-    """
+    """Generate visualization directly from DataFrame (0 tokens used)."""
     # Determine best visualization type if not specified
     if not visualization_type:
         visualization_type = _determine_best_visualization_type(df, query)
     
     # Generate visualization based on type
     if visualization_type == "pie":
-        return _generate_pie_chart(df, query)
+        result = _generate_pie_chart(df, query)
     elif visualization_type == "line":
-        return _generate_line_chart(df, query)
+        result = _generate_line_chart(df, query)
     elif visualization_type == "scatter":
-        return _generate_scatter_chart(df, query)
+        result = _generate_scatter_chart(df, query)
     else:  # Default to bar chart
-        return _generate_bar_chart(df, query)
+        result = _generate_bar_chart(df, query)
+    
+    result.tokens_used = 0 # Explicitly set tokens to 0 for direct generation
+    return result
 
 def _determine_best_visualization_type(df: pd.DataFrame, query: str) -> str:
     """Determine the best visualization type based on data and query.
@@ -354,7 +378,8 @@ def _generate_bar_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
     
     return VisualizationResult(
         data=chart_data,
-        explanation=explanation
+        explanation=explanation,
+        tokens_used=0
     )
 
 def _generate_line_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
@@ -461,7 +486,8 @@ def _generate_line_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
     
     return VisualizationResult(
         data=chart_data,
-        explanation=explanation
+        explanation=explanation,
+        tokens_used=0
     )
 
 def _generate_pie_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
@@ -541,7 +567,8 @@ def _generate_pie_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
     
     return VisualizationResult(
         data=chart_data,
-        explanation=explanation
+        explanation=explanation,
+        tokens_used=0
     )
 
 def _generate_scatter_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
@@ -619,7 +646,8 @@ def _generate_scatter_chart(df: pd.DataFrame, query: str) -> VisualizationResult
     
     return VisualizationResult(
         data=chart_data,
-        explanation=explanation
+        explanation=explanation,
+        tokens_used=0
     )
 
 def _create_fallback_visualization(
@@ -663,7 +691,8 @@ def _create_fallback_visualization(
                         }
                     ]
                 },
-                explanation=f"This is a basic {chart_type} chart showing {keys[1]} for each {keys[0]}. This is a fallback visualization as the custom generation failed."
+                explanation=f"This is a basic {chart_type} chart showing {keys[1]} for each {keys[0]}. This is a fallback visualization as the custom generation failed.",
+                tokens_used=0
             )
     
     # For dictionaries or empty lists, create minimal visualization
@@ -682,7 +711,8 @@ def _create_fallback_visualization(
                 }
             ]
         },
-        explanation="Could not generate a detailed visualization for this data. The data structure may not be suitable for the requested visualization type."
+        explanation="Could not generate a detailed visualization for this data. The data structure may not be suitable for the requested visualization type.",
+        tokens_used=0
     )
 
 def _create_emergency_fallback_visualization(
@@ -715,7 +745,8 @@ def _create_emergency_fallback_visualization(
                 }
             ]
         },
-        explanation="I encountered an error while generating a visualization for your data. This is a placeholder chart. You may want to try a different query or visualization type."
+        explanation="I encountered an error while generating a visualization for your data. This is a placeholder chart. You may want to try a different query or visualization type.",
+        tokens_used=0
     )
 
 def _convert_to_number(value) -> float:
