@@ -24,6 +24,7 @@ from langchain.agents.format_scratchpad import format_to_openai_function_message
 from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
 from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain.memory import ConversationBufferMemory
+from app.core.token_manager import TokenManager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -229,13 +230,18 @@ class SQLAgent(BaseAgent):
 You help users query data and analyze their business information in natural, conversational language.
             
 DATA ISOLATION CRITICAL RULE:
-ALWAYS include WHERE created_by = {company_id} in ALL your queries.
+ALWAYS include WHERE created_by = {company_id} in ALL your queries for ALL tables involved.
 This is required for security, no exceptions.
 
 QUERY EXAMPLE:
 SELECT * FROM projects WHERE created_by = {company_id};
 SELECT * FROM employees WHERE created_by = {company_id};
-SELECT p.name, e.name FROM projects p JOIN employees e WHERE p.created_by = {company_id} AND e.created_by = {company_id};
+SELECT p.name, u.name FROM projects p JOIN project_users pu ON p.id = pu.project_id JOIN users u ON pu.user_id = u.id WHERE p.created_by = {company_id} AND u.created_by = {company_id};
+
+IMPORTANT TABLE USAGE RULES:
+1. For user information like names and emails, ALWAYS prefer joining with the `users` table using `users.id`.
+2. Only use the `employees` table if the query specifically asks for employee-specific details (like salary, department, designation, hire date, etc.).
+3. Common join for project members: `projects` -> `project_users` -> `users`.
 
 RESPONSE GUIDELINES:
 1. Always use natural, conversational language
@@ -246,7 +252,7 @@ RESPONSE GUIDELINES:
 TECHNICAL RULES:
 1. Write SQL compatible with MySQL 5.7
 2. Only use SELECT statements (no INSERT, UPDATE, DELETE, etc.)
-3. When joining tables, ensure proper join conditions
+3. When joining tables, ensure proper join conditions AND company isolation for ALL tables.
 """
 
             # Create agent executor with enhanced prompt
@@ -261,49 +267,92 @@ TECHNICAL RULES:
                 prefix=system_message_content  # Use our enhanced prompt
             )
             
-            # Process message with agent
+            tokens_used_in_request = 0
+            tokens_remaining_after = None
+
             try:
-                agent_response = await agent_executor.arun(message)
+                # Execute agent and capture full response including potential token usage
+                # We use ainvoke which returns a richer dictionary than arun
+                agent_result = await agent_executor.ainvoke({"input": message})
                 
-                # Check if the response contains SQL code blocks and clean them
-                cleaned_response = self._clean_response_for_end_user(agent_response)
+                # Extract the final answer and potential token usage
+                agent_final_answer = agent_result.get("output", "Sorry, I could not process that.")
                 
-                # Add conversation to history
+                # --- Attempt to get token usage (adapt based on actual LLM/agent output structure) ---
+                # Example: Check common keys where token info might be stored
+                # You might need to inspect the actual 'agent_result' dict structure
+                # from your specific LLM provider (Gemini, OpenAI) to find the exact keys.
+                llm_output = agent_result.get("llm_output", {}) # Or similar key if agent provides it
+                if llm_output and isinstance(llm_output, dict):
+                     # Example for OpenAI structure (adapt for Gemini if different)
+                     usage_metadata = llm_output.get("token_usage", {}) 
+                     if isinstance(usage_metadata, dict):
+                          tokens_used_in_request = usage_metadata.get("total_tokens", 1) # Default to 1 if not found
+                
+                if tokens_used_in_request == 0:
+                     # Fallback if LLM didn't provide usage, estimate based on message length?
+                     # Or set a default minimum cost
+                     tokens_used_in_request = max(1, len(message.split()) // 10) # Simple estimate
+                     logger.warning(f"Could not determine exact token usage from LLM for company {company_id}. Estimated: {tokens_used_in_request}")
+                else:
+                     logger.info(f"Tokens used by LLM for company {company_id}: {tokens_used_in_request}")
+
+                cleaned_response = self._clean_response_for_end_user(agent_final_answer)
+
+                # --- Update token count in DB ---
+                if session:
+                    token_update_success = await self._update_token_usage(session, company_id, tokens_used_in_request)
+                    if token_update_success:
+                         tokens_remaining_after = await TokenManager.get_token_count(company_id, session)
+                    else:
+                         logger.error(f"Failed to update token usage for company {company_id} in database.")
+                         # Handle appropriately - maybe return error or proceed with null remaining tokens?
+                         # For now, we proceed but tokens_remaining might be inaccurate.
+
+                # --- Save Conversation ---
+                conversation_title = await self._generate_conversation_title(
+                     conversation_id, company_id, message, cleaned_response
+                )
                 if session:
                     await self._save_conversation(
+                        session=session,
                         conversation_id=conversation_id,
                         company_id=company_id,
                         user_id=user_id,
                         message=message,
                         response=cleaned_response,
                         agent_type=self.type,
-                        session=session
+                        tokens_used=tokens_used_in_request, # Save actual/estimated usage
+                        title=conversation_title # Pass the generated title
                     )
-                
-                # Generate a title for the conversation if it's new
-                conversation_title = await self._generate_conversation_title(
-                    conversation_id, company_id, message, cleaned_response
-                )
-                
+
+                # --- Return Final Response ---
                 return AgentResponse(
                     conversation_id=conversation_id,
                     response=cleaned_response,
                     conversation_title=conversation_title,
-                    created_at=datetime.now().isoformat()
+                    tokens_used=tokens_used_in_request,
+                    tokens_remaining=tokens_remaining_after 
                 )
+
             except Exception as e:
-                logger.error(f"Agent execution error: {str(e)}")
+                logger.error(f"Agent execution or processing error: {str(e)}", exc_info=True)
+                # Ensure error responses also conform to the model structure
                 return AgentResponse(
-                    conversation_id=conversation_id,
-                    response=f"I'm having trouble processing your request. Please try rephrasing. Error: {str(e)}",
-                    conversation_title=None
+                    conversation_id=conversation_id or str(uuid.uuid4()), # Generate if needed
+                    response=f"I encountered an error processing your request. Details: {str(e)}",
+                    conversation_title=None,
+                    tokens_used=0, # No tokens used if error occurred before/during execution
+                    tokens_remaining=await TokenManager.get_token_count(company_id, session) if session else None # Show current count if possible
                 )
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}", exc_info=True)
             return AgentResponse(
                 conversation_id=str(uuid.uuid4()) if not conversation_id else conversation_id,
                 response="I apologize, but I encountered an internal error processing your request.",
-                conversation_title=None
+                conversation_title=None,
+                tokens_used=0,
+                tokens_remaining=await TokenManager.get_token_count(company_id, session) if session else None
             )
     
     async def generate_visualization(
