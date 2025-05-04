@@ -101,7 +101,8 @@ class BaseAgent(ABC):
         response: str,
         agent_type: str,
         tokens_used: int = 1,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        visualization: Optional[Dict[str, Any]] = None
     ) -> None:
         """Save conversation to database, generating a title if needed.
         
@@ -115,6 +116,7 @@ class BaseAgent(ABC):
             agent_type: Agent type
             tokens_used: Tokens used
             title: Optional title (if provided, used; otherwise generated if needed)
+            visualization: Optional visualization data
         """
         try:
             # Check if table exists, create if not (this part is potentially inefficient)
@@ -127,17 +129,17 @@ class BaseAgent(ABC):
                     user_id VARCHAR(255) NOT NULL,
                     message TEXT NOT NULL,
                     response TEXT NOT NULL,
-                    agent_type VARCHAR(50) NOT NULL,
+                    agent_type VARCHAR(50) NULL,
                     tokens_used INT DEFAULT 1,
                     title VARCHAR(255) NULL,
+                    visualization JSON NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     INDEX (conversation_id),
-                    INDEX (company_user_id),
-                    INDEX (user_id)
+                    INDEX (company_user_id)
                 )
             """))
-
-            final_title = title # Use provided title if available
+            
+            final_title = title  # Use provided title if available
 
             # Check if a title needs to be generated (only if no title provided AND it's the first message)
             if final_title is None:
@@ -157,12 +159,8 @@ class BaseAgent(ABC):
                         logger.error(f"Failed to generate title for conversation {conversation_id}: {title_gen_error}")
                         final_title = message[:50] + "..." # Fallback title
 
-            # Insert conversation with the final title (either provided, generated, or fallback)
-            session.execute(text("""
-                INSERT INTO agent_conversations 
-                (conversation_id, company_user_id, user_id, message, response, agent_type, tokens_used, title)
-                VALUES (:conversation_id, :company_user_id, :user_id, :message, :response, :agent_type, :tokens_used, :title)
-            """), {
+            # Prepare parameters
+            params = {
                 "conversation_id": conversation_id,
                 "company_user_id": company_id,
                 "user_id": user_id,
@@ -171,7 +169,33 @@ class BaseAgent(ABC):
                 "agent_type": agent_type,
                 "tokens_used": tokens_used,
                 "title": final_title # Use the determined title
-            })
+            }
+            
+            # Add visualization if provided
+            if visualization:
+                # Convert to JSON string if not already
+                import json
+                if not isinstance(visualization, str):
+                    visualization_json = json.dumps(visualization)
+                else:
+                    visualization_json = visualization
+                    
+                params["visualization"] = visualization_json
+                
+                # Insert with visualization
+                session.execute(text("""
+                    INSERT INTO agent_conversations 
+                    (conversation_id, company_user_id, user_id, message, response, agent_type, tokens_used, title, visualization)
+                    VALUES (:conversation_id, :company_user_id, :user_id, :message, :response, :agent_type, :tokens_used, :title, :visualization)
+                """), params)
+                logger.info(f"Saved conversation with visualization data for conversation {conversation_id}")
+            else:
+                # Insert without visualization
+                session.execute(text("""
+                    INSERT INTO agent_conversations 
+                    (conversation_id, company_user_id, user_id, message, response, agent_type, tokens_used, title)
+                    VALUES (:conversation_id, :company_user_id, :user_id, :message, :response, :agent_type, :tokens_used, :title)
+                """), params)
             
             session.commit()
         except Exception as e:
@@ -237,7 +261,7 @@ class BaseAgent(ABC):
         """Retrieve all messages for a specific conversation."""
         try:
             result = session.execute(text("""
-                SELECT message, response, agent_type, created_at
+                SELECT message, response, agent_type, created_at, visualization
                 FROM agent_conversations
                 WHERE conversation_id = :conversation_id
                 AND company_user_id = :company_id
@@ -246,8 +270,37 @@ class BaseAgent(ABC):
             
             messages = []
             for row in result:
+                # Add user message
                 messages.append({"role": "user", "content": row[0], "timestamp": str(row[3])})
-                messages.append({"role": "agent", "content": row[1], "timestamp": str(row[3]), "agent_type": row[2]})
+                
+                # Create agent message
+                agent_message = {
+                    "role": "agent", 
+                    "content": row[1], 
+                    "timestamp": str(row[3]), 
+                    "agent_type": row[2]
+                }
+                
+                # Add visualization data if present (row[4] is visualization column)
+                if row[4]:
+                    try:
+                        import json
+                        # If stored as JSON string, parse it; if already an object, use as is
+                        if isinstance(row[4], str):
+                            visualization_data = json.loads(row[4])
+                        else:
+                            visualization_data = row[4]
+                        
+                        # Ensure options is an object, not an array
+                        if 'options' in visualization_data and isinstance(visualization_data['options'], list) and len(visualization_data['options']) == 0:
+                            visualization_data['options'] = {}
+                            
+                        agent_message["visualization"] = visualization_data
+                        logger.info(f"Including visualization data for message in conversation {conversation_id}: {visualization_data['chart_type']}")
+                    except Exception as viz_error:
+                        logger.error(f"Error parsing visualization data: {viz_error}")
+                
+                messages.append(agent_message)
 
             return messages
         except Exception as e:

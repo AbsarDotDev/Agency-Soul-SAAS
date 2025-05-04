@@ -186,7 +186,7 @@ async def health_check():
     return {"status": "healthy"}
 
 class ConversationHistoryResponse(BaseModel):
-    messages: List[Dict[str, str]] = Field(..., description="List of messages in the conversation")
+    messages: List[Dict[str, Any]] = Field(..., description="List of messages in the conversation")
 
 @router.get("/conversation/{conversation_id}", response_model=ConversationHistoryResponse, tags=["Chat"])
 async def get_conversation_history_endpoint(
@@ -209,6 +209,17 @@ async def get_conversation_history_endpoint(
              logger.warning(f"No messages found for conversation {conversation_id} or access denied.")
              # Return empty list if no messages found,符合 Pydantic 模型
              # Alternatively, raise HTTPException(status_code=404, detail="Conversation not found")
+             
+        # Log visualization data if present in any message for debugging
+        has_visualization = False
+        for msg in messages:
+            if 'visualization' in msg and msg['visualization']:
+                has_visualization = True
+                logger.info(f"Conversation {conversation_id} includes visualization data in response")
+                break
+        
+        if not has_visualization:
+            logger.warning(f"No visualization data found in any message for conversation {conversation_id}")
              
         return ConversationHistoryResponse(messages=messages)
 

@@ -424,7 +424,7 @@ TECHNICAL RULES:
 
                 # --- Save Conversation ---
                 conversation_title = await self._generate_conversation_title(
-                     conversation_id, company_id, message, cleaned_response
+                    conversation_id, company_id, message, cleaned_response
                 )
                 if session:
                     await self._save_conversation(
@@ -436,13 +436,14 @@ TECHNICAL RULES:
                         response=cleaned_response,
                         agent_type=self.type,
                         tokens_used=total_tokens_used, # Save the total tokens used
-                        title=conversation_title 
+                        title=conversation_title,
+                        visualization=visualization_chart_data # Include visualization data
                     )
 
                 # --- Return Final Response ---
                 return AgentResponse(
                     conversation_id=conversation_id,
-                    response=cleaned_response,             
+                    response=cleaned_response,
                     conversation_title=conversation_title,
                     tokens_used=total_tokens_used, # Return the total
                     tokens_remaining=tokens_remaining_after,
