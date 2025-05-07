@@ -15,8 +15,8 @@ RUN poetry config virtualenvs.create false \
 # Copy application code
 COPY main.py ./
 COPY app/ ./app/
-COPY .env ./
-COPY .env.prod ./
+# COPY .env ./ # Avoid copying .env with potential secrets
+# COPY .env.prod ./ # Avoid copying .env.prod with potential secrets
 COPY .env.example ./
 
 # Set environment variable for port
