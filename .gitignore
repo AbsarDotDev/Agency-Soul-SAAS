@@ -3,6 +3,7 @@
 # vendor folder complete
 /vendor
 .env
+.azure.env
 .env.local
 !.env.prod
 !.env.local
