@@ -5,8 +5,5 @@
 .env
 .azure.env
 .env.local
-!.env.prod
-!.env.local
 .env.prod
-.env.local
 /storage

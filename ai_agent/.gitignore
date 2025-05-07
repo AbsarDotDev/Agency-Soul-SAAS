@@ -16,7 +16,9 @@ ENV/
 # Environment files
 .env
 !.env.example
-!.env.prod
+.env.local
+.env.prod
+.azure.env
 
 # VSCode
 .vscode/
