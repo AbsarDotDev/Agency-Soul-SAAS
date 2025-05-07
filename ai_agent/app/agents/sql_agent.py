@@ -167,9 +167,11 @@ class SQLAgent(BaseAgent):
         Returns:
             Agent response
         """
+        is_new_conversation = False # Track if it's a new conversation
         try:
             # Generate new conversation ID if not provided
             if not conversation_id:
+                is_new_conversation = True
                 conversation_id = str(uuid.uuid4())
             
             # Initialize LLM
@@ -240,8 +242,12 @@ SELECT p.name, u.name FROM projects p JOIN project_users pu ON p.id = pu.project
 
 IMPORTANT TABLE USAGE RULES:
 1. For user information like names and emails, ALWAYS prefer joining with the `users` table using `users.id`.
-2. Only use the `employees` table if the query specifically asks for employee-specific details (like salary, department, designation, hire date, etc.).
+2. Only use the `employees` table if the query *specifically and explicitly* asks for employee-only details (like salary, department, designation, hire date, etc.) OR if the context of the conversation (e.g., a previous question about employees) clearly indicates that a pronoun like "their" or "them" refers to employees. In such contextual cases, prioritize using the `employees` table for names if appropriate.
 3. Common join for project members: `projects` -> `project_users` -> `users`.
+
+CONTEXTUAL UNDERSTANDING:
+- Pay close attention to pronouns (e.g., "their", "them", "those"). If the user just asked about a specific group (e.g., "employees", "projects named X"), and then asks a follow-up question using a pronoun, assume the pronoun refers to that previously mentioned group.
+- Example: If user asks "How many employees are there?" and then "Tell me their names", "their" refers to employees. Query the `employees` table for names in this case.
 
 VISUALIZATION RULES:
 1. If the user asks to "visualize", "chart", "plot", or "graph" data, first generate the SQL query and get the results.
@@ -263,6 +269,7 @@ RESPONSE GUIDELINES:
 2. Explain insights in business terms, not database terms.
 3. Present numerical results readably in the text.
 4. Keep responses friendly and helpful.
+5. If the user asks for "names" along with other attributes (e.g., "names and designations", "names and salaries"), ensure your textual response includes a list of the individual names. Do not just summarize the other attributes without listing the names if they were requested. For example, for "Tell their names and designation", an acceptable response would list each employee and their designation.
 
 TECHNICAL RULES:
 1. Write SQL compatible with MySQL 5.7
@@ -423,28 +430,49 @@ TECHNICAL RULES:
                          tokens_remaining_after = await TokenManager.get_token_count(company_id, session)
 
                 # --- Save Conversation ---
-                conversation_title = await self._generate_conversation_title(
-                    conversation_id, company_id, message, cleaned_response
+                actual_title_saved = await self._save_conversation(
+                    session=session,
+                    conversation_id=conversation_id,
+                    company_id=company_id,
+                    user_id=user_id,
+                    message=message, 
+                    response=cleaned_response, 
+                    agent_type=self.type,
+                    tokens_used=total_tokens_used,
+                    visualization=visualization_chart_data,
+                    title=None # Let _save_conversation logic decide based on whether it's new
                 )
-                if session:
-                    await self._save_conversation(
-                        session=session,
-                        conversation_id=conversation_id,
-                        company_id=company_id,
-                        user_id=user_id,
-                        message=message,
-                        response=cleaned_response,
-                        agent_type=self.type,
-                        tokens_used=total_tokens_used, # Save the total tokens used
-                        title=conversation_title,
-                        visualization=visualization_chart_data # Include visualization data
-                    )
+                
+                title_for_response = actual_title_saved
+
+                if not is_new_conversation and actual_title_saved is None:
+                    # For an existing conversation, _save_conversation might return None if it didn't generate a new title for this specific turn.
+                    # We need to fetch the original, established title for the AgentResponse.
+                    try:
+                        stmt = text("""SELECT title FROM agent_conversations 
+                                     WHERE conversation_id = :conv_id AND title IS NOT NULL 
+                                     ORDER BY created_at ASC LIMIT 1""")
+                        result = session.execute(stmt, {"conv_id": conversation_id}).scalar_one_or_none()
+                        if result:
+                            title_for_response = result
+                            logger.info(f"Fetched original title '{title_for_response}' for existing conversation {conversation_id}")
+                        else:
+                            # Should not happen if conversation exists and had a title, but as a fallback:
+                            logger.warning(f"Could not fetch original title for existing conversation {conversation_id}. Using current message as fallback.")
+                            title_for_response = message[:75] + "..." # Fallback, less ideal
+                    except Exception as e:
+                        logger.error(f"Error fetching original title for conversation {conversation_id}: {e}. Using current message as fallback.")
+                        title_for_response = message[:75] + "..." # Fallback, less ideal
+                elif is_new_conversation and actual_title_saved is None:
+                    # If it was a new conversation but _save_conversation somehow failed to return a title (e.g., error during title gen)
+                    logger.warning(f"New conversation {conversation_id} saved, but no title returned from _save_conversation. Using current message as fallback.")
+                    title_for_response = message[:75] + "..."
 
                 # --- Return Final Response ---
                 return AgentResponse(
                     conversation_id=conversation_id,
                     response=cleaned_response,
-                    conversation_title=conversation_title,
+                    conversation_title=title_for_response, # Use the determined title
                     tokens_used=total_tokens_used, # Return the total
                     tokens_remaining=tokens_remaining_after,
                     visualization=visualization_chart_data

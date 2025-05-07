@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class AIAgentController extends Controller
 {
@@ -29,12 +30,29 @@ class AIAgentController extends Controller
         $ai_feature_enabled = $plan && $plan->ai_agent_enabled == 1;
 
         // Fetch conversation history for the sidebar
-        $conversations = \App\Models\AgentConversation::where('company_user_id', $company->id)
-                         ->select('conversation_id', 'title')
-                         ->distinct('conversation_id')
-                         ->orderBy('created_at', 'desc')
-                         ->limit(20)
-                         ->get();
+        // We need to get one title per conversation_id, preferably the one from the first message.
+        // And order by the most recent message in each conversation group.
+        
+        // Subquery to get the first non-null title for each conversation_id
+        $first_titles = \App\Models\AgentConversation::select('conversation_id', DB::raw('(SELECT title 
+                                                                                          FROM agent_conversations ac2 
+                                                                                          WHERE ac2.conversation_id = agent_conversations.conversation_id 
+                                                                                          AND ac2.title IS NOT NULL 
+                                                                                          ORDER BY ac2.created_at ASC 
+                                                                                          LIMIT 1) as conversation_title'))
+            ->where('company_user_id', $company->id)
+            ->groupBy('conversation_id');
+
+        // Main query to get the list of conversations, ordered by the last message in each.
+        $conversations = \App\Models\AgentConversation::select('agent_conversations.conversation_id', 'ft.conversation_title as title', DB::raw('MAX(agent_conversations.created_at) as last_message_at'))
+            ->joinSub($first_titles, 'ft', function ($join) {
+                $join->on('agent_conversations.conversation_id', '=', 'ft.conversation_id');
+            })
+            ->where('agent_conversations.company_user_id', $company->id)
+            ->groupBy('agent_conversations.conversation_id', 'ft.conversation_title')
+            ->orderBy('last_message_at', 'desc')
+            ->limit(20)
+            ->get();
 
         // Calculate remaining tokens based on plan allocation and user usage
         $tokens_allocated = $plan ? $plan->ai_agent_default_tokens : 0;
@@ -173,33 +191,6 @@ class AIAgentController extends Controller
             // Recalculate remaining tokens
             $tokens_remaining = max(0, $tokens_allocated - $company->ai_agent_tokens_used);
 
-            // Save the conversation to the database for history purposes
-            try {
-                // Create conversation record with visualization data if available
-                \App\Models\AgentConversation::create([
-                    'conversation_id' => $conversationId,
-                    'company_user_id' => $company->id,
-                    'user_id' => $user->id,
-                    'title' => $conversationTitle,
-                    'message' => $validated['message'],
-                    'response' => $aiResponseText,
-                    'agent_type' => 'sql', // Default type for now
-                    'tokens_used' => $tokensUsedInRequest,
-                    'visualization' => $responseData['visualization'] ?? null
-                ]);
-                
-                Log::info("Conversation saved with ID: {$conversationId}");
-                
-                if (isset($responseData['visualization'])) {
-                    Log::info("Visualization data saved to database for conversation: {$conversationId}");
-                }
-            } catch (\Exception $e) {
-                Log::error("Error saving conversation: {$e->getMessage()}", [
-                    'conversation_id' => $conversationId,
-                    'error' => $e->getMessage()
-                ]);
-            }
-
             // Return the successful response from the agent
             return response()->json([
                 'response' => $aiResponseText, // Use the correct variable holding the agent's answer
@@ -316,30 +307,30 @@ class AIAgentController extends Controller
     private function getConversationHistoryFromDatabase(string $conversationId, int $companyId)
     {
         try {
-            $conversations = \App\Models\AgentConversation::where('conversation_id', $conversationId)
+            $conversations_data = \App\Models\AgentConversation::where('conversation_id', $conversationId)
                 ->where('company_user_id', $companyId)
                 ->orderBy('created_at', 'asc')
                 ->get();
 
-            if ($conversations->isEmpty()) {
+            if ($conversations_data->isEmpty()) {
                 return response()->json(['messages' => []]);
             }
 
             // Format messages for the frontend
             $messages = [];
-            foreach ($conversations as $conv) {
+            foreach ($conversations_data as $conv) {
                 // Add user message
                 $messages[] = [
                     'role' => 'user',
                     'content' => $conv->message,
-                    'timestamp' => $conv->created_at->toIso8601String()
+                    'timestamp' => $conv->created_at ? $conv->created_at->toIso8601String() : now()->toIso8601String()
                 ];
                 
                 // Add agent message with visualization if available
                 $agentMessage = [
                     'role' => 'agent',
                     'content' => $conv->response,
-                    'timestamp' => $conv->created_at->toIso8601String(),
+                    'timestamp' => $conv->created_at ? $conv->created_at->toIso8601String() : now()->toIso8601String(),
                     'agent_type' => $conv->agent_type ?? 'unknown'
                 ];
                 

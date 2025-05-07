@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "agencysoul-ai-agent"
+version = "0.1.0"
+description = "AgenySoul AI Agent for company-specific data insights and automation."
+authors = ["Your Name <your@email.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "*"
+uvicorn = "*"
+python-dotenv = "*"
+pydantic = "*"
+sqlalchemy = "*"
+gunicorn = "*"
+langchain = "*"
+langchain-core = "*"
+langchain-community = "*"
+langgraph = "*"
+google-ai-generativelanguage = "*"
+google-genai = "*"
+langchain-google-genai = "*"
+langchain-openai = "*"
+openai = "*"
+mysql-connector-python = "*"
+sqlparse = "*"
+matplotlib = "*"
+pandas = "*"
+numpy = "*"
+httpx = "*"
+requests = "*"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api" 
