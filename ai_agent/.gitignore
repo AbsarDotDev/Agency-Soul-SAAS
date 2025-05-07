@@ -1,0 +1,25 @@
+.vercel
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Poetry
+poetry.lock
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Environment files
+.env
+!.env.example
+!.env.prod
+
+# VSCode
+.vscode/
+
+# OS files
+.DS_Store

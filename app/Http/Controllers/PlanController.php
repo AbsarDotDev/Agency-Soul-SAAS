@@ -86,6 +86,7 @@ class PlanController extends Controller
                 $validation['max_customers'] = 'required|numeric';
                 $validation['max_venders']   = 'required|numeric';
                 $validation['storage_limit']   = 'required|numeric';
+                $validation['ai_agent_default_tokens'] = 'nullable|required_if:ai_agent_enabled,on|numeric|min:0';
 
                 if($request->image)
                 {
@@ -117,6 +118,10 @@ class PlanController extends Controller
                 {
                     $post['chatgpt'] = 1;
                 }
+                else
+                {
+                    $post['chatgpt'] = 0;
+                }
                 if(isset($request->trial))
                 {
                     $post['trial'] = 1;
@@ -137,7 +142,18 @@ class PlanController extends Controller
                     $post['image'] = $fileNameToStore;
                 }
 
-
+                // Add AI Agent logic for store
+                if($request->has('ai_agent_enabled'))
+                {
+                    $post['ai_agent_enabled'] = 1;
+                    $post['ai_agent_default_tokens'] = $request->ai_agent_default_tokens;
+                }
+                else
+                {
+                    $post['ai_agent_enabled'] = 0;
+                    $post['ai_agent_default_tokens'] = 0;
+                }
+                // End AI Agent logic
 
                 if(Plan::create($post))
                 {
@@ -218,6 +234,7 @@ class PlanController extends Controller
                             'max_customers' => 'required|numeric',
                             'max_venders'   => 'required|numeric',
                             'storage_limit' => 'required|numeric',
+                            'ai_agent_default_tokens' => 'nullable|required_if:ai_agent_enabled,on|numeric|min:0',
                         ]
                     );
 
@@ -278,6 +295,20 @@ class PlanController extends Controller
                     {
                         $post['chatgpt'] = 0;
                     }
+
+                    // AI Agent Settings
+                    if($request->has('ai_agent_enabled'))
+                    {
+                        $post['ai_agent_enabled'] = 1;
+                        $post['ai_agent_default_tokens'] = $request->ai_agent_default_tokens;
+                    }
+                    else
+                    {
+                        $post['ai_agent_enabled'] = 0;
+                        $post['ai_agent_default_tokens'] = 0; // Reset tokens if disabled
+                    }
+                    // End AI Agent Settings
+
                     if(isset($request->trial))
                     {
                         $post['trial'] = 1;

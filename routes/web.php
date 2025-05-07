@@ -157,6 +157,7 @@ use App\Http\Controllers\PayHereController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\ReferralProgramController;
 use App\Http\Controllers\TapController;
+use App\Http\Controllers\AIAgentController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
 
@@ -1783,3 +1784,22 @@ Route::group(['middleware' => ['verified']], function () {
 
 Route::any('/cookie-consent', [SystemController::class, 'CookieConsent'])->name('cookie-consent');
 Route::get('payslip/payslipPdf/{id}/{month}', [PaySlipController::class, 'payslipPdf'])->name('payslip.payslipPdf')->middleware(['XSS']);
+
+// AI Agent Route
+Route::middleware(['auth','XSS', \App\Http\Middleware\EnsureAIAgentEnabled::class])->prefix('ai-agent')->name('ai_agent.')->group(function () {
+    // Existing chat route, now protected by middleware
+    Route::post('chat', [AIAgentController::class, 'chat'])->name('chat.post');
+
+    // Add a route for the chat page itself, also protected
+    Route::get('chat', [AIAgentController::class, 'showChat'])->name('chat.show');
+
+    // If you have a dedicated page to show the chat interface:
+    // Route::get('chat', [AIAgentController::class, 'showChat'])->name('chat.show');
+});
+
+// Use the full class path for the middleware here as well
+Route::middleware(['auth', 'verified', \App\Http\Middleware\EnsureAIAgentEnabled::class])->group(function () {
+    Route::get('ai-agent', [AIAgentController::class, 'showChat'])->name('ai_agent.chat.show');
+    Route::post('ai-agent/chat', [AIAgentController::class, 'chat'])->name('ai_agent.chat.post');
+    Route::get('ai-agent/conversation/{id}', [AIAgentController::class, 'getConversationHistory'])->name('ai_agent.chat.history');
+});

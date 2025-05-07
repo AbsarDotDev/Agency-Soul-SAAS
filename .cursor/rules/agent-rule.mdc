@@ -1,0 +1,64 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+### 📚 Documentation Lookup Strategy (For AI Assistant)
+- **Always use the context7 MCP server** to reference documentation for libraries like Pydanti, langgraph, crewai, langchain etc
+- For the tokens, start with 5000 but then increase to 20000 if your first search didn't give relevant documentation.
+- Only search three times maximum for any specific piece of documentation. If you don't get what you need, use the Web tool to perform a wider search.
+
+### 🔄 Project Awareness & Context
+- **Always read [PLANNING.md](mdc:PLANNING.md)** at the start of a new conversation to understand the project's architecture, goals, style, and constraints, especially regarding the AI Agent integration within AgenySoul.
+- **Check @TASKS.MD** before starting a new task. If the task isn’t listed, add it with a brief description and today's date.
+- **Use consistent naming conventions, file structure, and architecture patterns** as described in @PLANNING.md. Follow existing Laravel conventions for the main application and establish clear conventions for the AI components.
+- **Prioritize Data Privacy:** Ensure all AI interactions strictly adhere to company-specific data boundaries. Company A's data must *never* be accessible or inferable by Company B's interactions. This is a critical constraint.
+
+### 🧱 Code Structure & Modularity
+- **Follow Laravel Best Practices:** Adhere to standard Laravel project structure and coding practices for all PHP code.
+- **AI Component Modularity:** Structure the AI agent code (whether PHP or Python) into clearly separated modules, likely corresponding to the multi-agent architecture (HRM, Sales, etc.).
+- **Keep Files Concise:** Aim to keep files, especially controllers, models, and service classes, focused and reasonably sized. Refactor large files into smaller, reusable components or services. While the 500-line rule is a guideline, prioritize readability and maintainability within the Laravel context.
+- **Use clear, consistent imports/namespaces.**
+
+### 🔐 Security & Data Handling
+- **Strict Data Isolation:** Implement robust mechanisms (e.g., tenant IDs, database scopes) in *all* database queries initiated by the AI agent to ensure only the currently authenticated company's data is accessed or modified.
+- **Secure Configuration:** Manage database credentials, API keys, and other sensitive information securely using Laravel's `.env` file and configuration system. Do not hardcode secrets.
+- **Input Validation:** Rigorously validate and sanitize all inputs received by the agent interface, especially before using them in database queries or task execution commands.
+- **Authorization:** Verify user roles and permissions before allowing access to the agent or execution of agent actions.
+
+### 💰 Usage Control & Billing Integration
+- **Enforce Usage Limits:** All AI agent interactions must validate the company's subscription plan status (AI Agent enabled/disabled) and available tokens *before* processing the request.
+- **Track Token Consumption:** Reliably decrement usage tokens upon successful completion of relevant agent interactions.
+
+### ✅ Task Completion & AI Agent Development
+- **Mark completed tasks in @TASKS.MD** immediately after finishing them.
+- **Add new sub-tasks or TODOs** discovered during development to @TASKS.MD under a “Discovered During Work” section.
+- **Multi-Agent Design:** Develop agents (HRM, Sales, etc.) as distinct components/services capable of independent operation but coordinated by a central dispatcher or logic.
+- **Action Capabilities:** When implementing agent actions (e.g., adding an employee), ensure proper authorization checks, data validation, feedback mechanisms, and token consumption (if applicable).
+- **Visualizations:** Implement data visualization generation (charts, graphs) using appropriate libraries only when suitable and requested.
+- **Conversation History:** Implement a mechanism to securely store and retrieve conversation history, scoped per company and potentially per user within that company.
+
+### 📎 Style & Conventions (AgenySoul - Laravel Backend)
+- **Use PHP** with the latest stable Laravel version for the core web application.
+- **Follow Laravel Coding Standards** and community best practices. Consider using tools like PHP CS Fixer or Pint for automated formatting.
+- **Use Eloquent ORM** for database interactions, leveraging its features for relationships and scopes (crucial for data isolation).
+- **Write clear DocBlocks** for classes and methods, explaining their purpose, parameters, and return values.
+
+### 📎 Style & Conventions (Potential AI Components - If using Python)
+- *(Apply these if Python is used for specific AI/ML tasks)*
+- **Use Python 3.x** as the primary language for AI-specific modules/services.
+- **Follow PEP8**, use type hints, and format with `black`.
+- **Use appropriate libraries** for ML/NLP tasks (e.g., scikit-learn, spaCy, Transformers) and data handling (e.g., Pandas).
+- **Consider `pydantic`** for data validation if passing data between services.
+- **Write docstrings** for every function using a consistent style (e.g., Google style).
+
+### 📚 Documentation & Explainability
+- **Update `README.md`** and potentially a dedicated AI Agent section, detailing setup, architecture, environment variables, plan/token configuration, and how to interact with the agent components.
+- **Comment non-obvious code**, especially complex logic within the AI agents, data isolation mechanisms, or token handling.
+- **Add inline `# Reason:` comments** for critical design choices or complex logic.
+
+### 🧠 AI Behavior Rules (For interacting with an AI coding assistant like me)
+- **Never assume missing context regarding data isolation, plan/token checks, or core Laravel structure. Ask questions if uncertain.**
+- **Confirm file paths and class/namespace names** before referencing them.
+- **Never delete or overwrite existing core AgenySoul code** unless explicitly instructed and confirmed by me
+- **Focus on one specific task per request** for clarity and better results.
