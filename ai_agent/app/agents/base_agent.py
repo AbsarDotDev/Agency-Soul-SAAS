@@ -103,7 +103,7 @@ class BaseAgent(ABC):
         tokens_used: int = 1,
         title: Optional[str] = None,
         visualization: Optional[Dict[str, Any]] = None
-    ) -> None:
+    ) -> Optional[str]:
         """Save conversation to database, generating a title if needed.
         
         Args:
@@ -117,7 +117,11 @@ class BaseAgent(ABC):
             tokens_used: Tokens used
             title: Optional title (if provided, used; otherwise generated if needed)
             visualization: Optional visualization data
+            
+        Returns:
+            The final title determined for the conversation (generated or passed in).
         """
+        final_title = title # Initialize with passed-in title
         try:
             # Check if table exists, create if not (this part is potentially inefficient)
             # Consider moving the CREATE TABLE to an initialization step if possible
@@ -139,8 +143,6 @@ class BaseAgent(ABC):
                 )
             """))
             
-            final_title = title  # Use provided title if available
-
             # Check if a title needs to be generated (only if no title provided AND it's the first message)
             if final_title is None:
                 first_message_check = session.execute(text("""
@@ -151,9 +153,26 @@ class BaseAgent(ABC):
                 if first_message_check is None: # It's the first message
                     try:
                         llm = get_llm() # Get LLM instance
-                        prompt = f"Generate a concise title (max 5 words) for a conversation starting with:\nUser: {message}\nAgent: {response}\nTitle:"
+                        prompt = f"""Generate a concise and informative title (around 5-7 words) that summarizes the main topic of the following conversation excerpt.
+Focus on the user's primary question or goal. Avoid generic phrases.
+If the user's message is very short or a generic greeting, use the agent's response to help infer a topic.
+
+User's first message: "{message}"
+Agent's first response: "{response}"
+
+Suggested Title:"""
                         title_response = await llm.ainvoke(prompt)
-                        final_title = title_response.content.strip().strip('"\'')[:255] # Extract, clean, and truncate
+                        generated_title = title_response.content.strip()
+                        
+                        # Further cleaning: remove potential quotes, list markers, or "Title:" prefixes
+                        generated_title = generated_title.replace('"', '').replace("'", '')
+                        if generated_title.lower().startswith("title:"):
+                            generated_title = generated_title[len("title:"):].strip()
+                        if generated_title.startswith("- "):
+                            generated_title = generated_title[2:].strip()
+                            
+                        final_title = generated_title[:255] # Truncate if necessary
+                        
                         logger.info(f"Generated title for conversation {conversation_id}: {final_title}")
                     except Exception as title_gen_error:
                         logger.error(f"Failed to generate title for conversation {conversation_id}: {title_gen_error}")
@@ -198,9 +217,11 @@ class BaseAgent(ABC):
                 """), params)
             
             session.commit()
+            return final_title # Return the determined title
         except Exception as e:
             logger.error(f"Error saving conversation: {str(e)}")
             session.rollback()
+            return None # Return None on error or if no title was applicable
     
     async def _get_conversation_history(
         self,

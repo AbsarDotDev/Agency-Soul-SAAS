@@ -2,7 +2,6 @@ import os
 import logging
 from typing import Optional, Dict, Any
 
-from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.language_models import BaseChatModel
 from langchain_community.embeddings import OpenAIEmbeddings

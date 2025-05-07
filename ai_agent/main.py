@@ -3,9 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.api.routes import router as api_router
-from app.core.config import settings
 from app.database.connection import DatabaseConnection
 
 # Set up logging
@@ -23,6 +23,7 @@ async def lifespan(app: FastAPI):
     try:
         engine = DatabaseConnection.create_engine()
         with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
             logger.info("Database connection successful.")
     except Exception as e:
         logger.error(f"Failed to connect to database during startup: {str(e)}")
@@ -77,7 +78,7 @@ async def test_db():
     try:
         engine = DatabaseConnection.create_engine()
         with engine.connect() as conn:
-            result = conn.execute("SELECT 1")
+            result = conn.execute(text("SELECT 1"))
             return {"status": "Database connection successful"}
     except Exception as e:
         logger.error(f"Failed to connect to database: {str(e)}")
