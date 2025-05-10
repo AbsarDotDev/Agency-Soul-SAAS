@@ -92,3 +92,60 @@
     *   Verify/refine conversation context handling in `SQLAgent`.
 6.  **Visualization Integration (Deferred/Optional):** Connect visualization generation if needed.
 7.  **Testing & Refinement:** Thorough testing of access control, token logic, chat functionality, data isolation.
+
+## AI Agent Architecture
+
+### LangGraph-based Multi-Agent System
+
+The AI agent system now uses LangGraph to create a robust, observable agent architecture that specializes in different business domains while maintaining the ability to handle general queries through SQL.
+
+#### Core Components
+
+1. **LangGraph Dispatcher**
+   - Central orchestrator that routes user queries to specialized agents
+   - Manages the state transitions between agents
+   - Enables visualization of the agent workflow
+   - Provides fallback mechanisms when specialized agents can't answer queries
+
+2. **Agent Types**
+   - **HRM Agent**: Handles employee management, attendance, payroll, departments, etc.
+   - **Finance Agent**: Handles accounting, transactions, bills, invoices, budgets, etc.
+   - **CRM Agent**: Handles customer relationships, support tickets, contracts, etc.
+   - **Sales Agent**: Handles leads, deals, pipeline management, products/services, etc.
+   - **SQL Agent**: Handles general database queries and serves as a fallback for other agents
+
+3. **Agent State Graph**
+   - Router Node: Analyzes user query and determines which agent should handle it
+   - Specialized Agent Nodes: Process queries related to their domain
+   - Visualization Node: Handles chart/graph generation requests
+   - Action Node: Executes specific actions like adding/updating records
+
+4. **Fallback Mechanism**
+   - If a specialized agent can't answer a query, control flows to the SQL agent
+   - Ensures users always get a response even for complex or cross-domain queries
+
+#### How It Works
+
+1. User sends a query to the API endpoint
+2. The LangGraph dispatcher initializes with the user's query as the initial state
+3. The router node analyzes the query and routes it to the appropriate specialized agent
+4. The specialized agent processes the query and either:
+   - Returns a complete response if it can handle the query
+   - Falls back to the SQL agent if it cannot handle the query
+5. The final response is returned to the user
+
+#### Key Technical Improvements
+
+- **Singleton Pattern**: All agents, LLM models, and the LangGraph itself are initialized once and reused across requests
+- **Preloading**: Models and graph are compiled during application startup, reducing request latency
+- **Structured State Management**: Clear state definition with TypedDict for consistency
+- **Enhanced Error Handling**: Comprehensive error handling with graceful fallbacks at every level
+- **Observability**: The LangGraph structure can be visualized for debugging and understanding agent workflows
+
+#### Agent Routing Logic
+
+Routing uses a combination of pattern matching and LLM-based intent detection:
+- Direct SQL queries are detected through regex patterns
+- Visualization requests are detected through keyword analysis
+- Action requests have explicit action names
+- For ambiguous queries, an LLM analyzes the content to determine the most appropriate agent

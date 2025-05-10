@@ -223,11 +223,25 @@
         // --- Functions ---
 
         // Display a message in the chat history
-        function displayMessage(sender, text) {
+        function displayMessage(sender, text, agentType) {
             const messageClass = sender === 'user' ? 'user-message' : 'agent-message';
             const $messageDiv = $('<div>').addClass('message').addClass(messageClass);
             
             if (sender === 'agent') {
+                // Create badge for agent type if available
+                let agentBadge = '';
+                if (agentType) {
+                    const badgeColorClass = {
+                        'sql': 'bg-primary',
+                        'hrm': 'bg-success',
+                        'finance': 'bg-info',
+                        'crm': 'bg-warning',
+                        'sales': 'bg-danger'
+                    }[agentType.toLowerCase()] || 'bg-secondary';
+                    
+                    agentBadge = `<span class="badge ${badgeColorClass} ms-2">${agentType.toUpperCase()}</span>`;
+                }
+                
                 // For agent messages, always call formatAgentResponse and render as HTML
                 const formattedHtml = formatAgentResponse(text);
                 $messageDiv.html(`
@@ -236,6 +250,10 @@
                             <span class="avatar-icon"><i class="ti ti-robot"></i></span>
                         </div>
                         <div class="agent-content">
+                            <div class="d-flex align-items-center mb-1">
+                                <span class="fw-bold">AI Assistant</span>
+                                ${agentBadge}
+                            </div>
                             ${formattedHtml} 
                         </div>
                     </div>
@@ -318,12 +336,12 @@
                     console.log("[loadConversation] Full history response:", response);
                     if (response.messages && Array.isArray(response.messages)) {
                          if(response.messages.length === 0) {
-                             displayMessage('agent', 'This conversation is empty or could not be loaded.');
+                             displayMessage('agent', 'This conversation is empty or could not be loaded.', null);
                          } else {
                              // Log each message for debugging
                              response.messages.forEach((msg, index) => {
                                  console.log(`[loadConversation] Message ${index+1}:`, msg);
-                                 displayMessage(msg.role, msg.content);
+                                 displayMessage(msg.role, msg.content, msg.agent_type);
                                  
                                  // Check if this message has visualization data
                                  if (msg.visualization) {
@@ -345,13 +363,13 @@
                              });
                          }
                      } else {
-                        displayMessage('agent', 'Error: Could not load conversation history.');
+                        displayMessage('agent', 'Error: Could not load conversation history.', null);
                         console.error("[loadConversation] Invalid history response format:", response);
                     }
                 },
                 error: function(jqXHR, textStatus, errorThrown) {
                     console.error("[loadConversation] Error loading history:", textStatus, errorThrown, jqXHR.responseText);
-                    displayMessage('agent', 'Error: Failed to load conversation history. ' + (jqXHR.responseJSON?.error || ''));
+                    displayMessage('agent', 'Error: Failed to load conversation history. ' + (jqXHR.responseJSON?.error || ''), null);
                 },
                 complete: function() {
                     setLoading(false);
@@ -369,7 +387,7 @@
             if (!message) return;
             
             // Display the user's message
-            displayMessage('user', message);
+            displayMessage('user', message, null);
             $messageInput.val(''); // Clear input field
             
             // Set loading state
@@ -405,7 +423,7 @@
                     }
                     
                     // Display agent response text
-                    displayMessage('agent', response.response);
+                    displayMessage('agent', response.text, response.agent_type);
                     
                     // Check for and display visualization if present
                     if (response.visualization) {
@@ -417,7 +435,7 @@
                             }, 100);
                         } catch (err) {
                             console.error("Error displaying visualization:", err);
-                            displayMessage('agent', 'There was an error displaying the visualization.');
+                            displayMessage('agent', 'There was an error displaying the visualization.', response.agent_type);
                         }
                     } else {
                         console.log("No visualization data in response. Full response:", JSON.stringify(response));
@@ -441,7 +459,7 @@
                         console.error("Error parsing error response:", e);
                     }
                     
-                    displayMessage('agent', errorMessage);
+                    displayMessage('agent', errorMessage, null);
                 },
                 complete: function () {
                     setLoading(false);
@@ -479,7 +497,7 @@
             console.log("Starting new chat...");
             currentConversationId = null;
             $chatHistory.empty(); // Clear current chat history display
-            displayMessage('agent', '{{ __("Hello! How can I help you analyze your company's data today?") }}'); // Display initial message
+            displayMessage('agent', '{{ __("Hello! How can I help you analyze your company's data today?") }}', null); // Display initial message
             $conversationList.find('.list-group-item').removeClass('active'); // Deselect sidebar item
             $messageInput.val(''); // Clear input field
             
@@ -635,7 +653,7 @@
             
             if (!vizData || !vizData.chart_type || !vizData.labels || !vizData.datasets) {
                 console.error('[displayVisualization] Invalid visualization data received:', vizData);
-                displayMessage('agent', 'Received invalid data for visualization.');
+                displayMessage('agent', 'Received invalid data for visualization.', null);
                 return;
             }
 

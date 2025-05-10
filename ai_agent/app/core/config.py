@@ -32,6 +32,9 @@ class Settings(BaseModel):
     # Token settings
     DEFAULT_TOKEN_ALLOCATION: int = int(os.getenv("DEFAULT_TOKEN_ALLOCATION", "100"))
     
+    # Internal Service API Key (for service-to-service authentication of the /auth endpoint itself)
+    INTERNAL_SERVICE_API_KEY: Optional[str] = os.getenv("INTERNAL_SERVICE_API_KEY", None)
+    
     # JWT settings
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     JWT_ALGORITHM: str = "HS256"

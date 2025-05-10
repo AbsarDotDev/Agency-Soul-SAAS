@@ -3,264 +3,183 @@ from sqlalchemy.orm import Session
 import logging
 import uuid
 import json
+import re
+# Import message types from langchain directly
+from langchain_core.messages import SystemMessage, HumanMessage
+from sqlalchemy import text
 
 from app.agents.base_agent import BaseAgent, AgentResponse, VisualizationResult, ActionResult
 from app.database.queries import DatabaseQueries
+from app.database.connection import get_company_isolated_sql_database, DatabaseConnection
+from app.core.llm import get_llm
+from app.agents.specialized_agent_base import SpecializedAgentBase
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-class CRMAgent(BaseAgent):
-    """CRM agent for handling customer relationship management related queries."""
+class CRMAgent(SpecializedAgentBase):
+    """CRM agent for handling customer relationship management queries using database access."""
     
-    async def process_message(
-        self, 
-        message: str, 
-        company_id: int, 
-        user_id: str,
-        conversation_id: Optional[str] = None,
-        session: Optional[Session] = None
-    ) -> AgentResponse:
-        """Process CRM related message.
+    def __init__(self):
+        """Initialize CRM agent with relevant tables."""
+        # Check which tables actually exist in the database
+        existing_tables = self._get_existing_tables()
         
-        Args:
-            message: User message
-            company_id: Company ID
-            user_id: User ID
-            conversation_id: Optional conversation ID
-            session: Optional database session
-            
-        Returns:
-            Agent response
-        """
-        # Generate new conversation ID if not provided
-        if not conversation_id:
-            conversation_id = str(uuid.uuid4())
+        # Define tables relevant to CRM
+        crm_tables = [
+            "customers",
+            "clients",
+            "leads",
+            "lead_calls",
+            "lead_discussions", 
+            "lead_emails",
+            "lead_files",
+            "lead_activity_logs",
+            "user_leads",
+            "deals",
+            "deal_calls",
+            "deal_discussions",
+            "deal_emails",
+            "deal_files",
+            "deal_tasks",
+            "client_deals",
+            "user_deals",
+            "lead_stages",
+            "pipelines",
+            "stages",
+            "supports",
+            "bugs",
+            "contracts",
+            "contract_types",
+            "proposals",
+            "sources",
+            "labels"
+        ]
         
-        # Get conversation history if conversation ID is provided
-        conversation_history = []
-        if conversation_id and session:
-            conversation_history = await self._get_conversation_history(
-                conversation_id=conversation_id,
-                company_id=company_id,
-                session=session
-            )
+        # Filter to tables that actually exist in the database
+        crm_tables = [table for table in crm_tables if table in existing_tables]
         
-        # Build chat context
-        context = {
-            "agent_type": "CRM",
-            "user_id": user_id,
-        }
-        
-        # Get company information
-        company_info = None
-        if session:
-            try:
-                company_info = await DatabaseQueries.get_company_info(
-                    company_id=company_id,
-                    session=session
-                )
-                context["company_name"] = company_info.get("company_name", "")
-            except Exception as e:
-                logger.error(f"Error getting company info: {str(e)}")
-        
-        # Get customer data for context
-        try:
-            if session:
-                customers = await DatabaseQueries.get_customer_data(
-                    company_id=company_id,
-                    session=session
-                )
-                context["customer_count"] = len(customers)
-                
-                # Add geographic distribution stats if available
-                regions = {}
-                for customer in customers:
-                    region = customer.get("billing_state", "Unknown")
-                    if region in regions:
-                        regions[region] += 1
-                    else:
-                        regions[region] = 1
-                
-                context["customer_regions"] = regions
-        except Exception as e:
-            logger.error(f"Error getting customer data: {str(e)}")
-        
-        # Build system prompt
-        system_prompt = self._generate_system_prompt(company_id, context)
-        
-        # Build user prompt with conversation history
-        user_prompt = message
-        if conversation_history:
-            user_prompt = f"Conversation history:\n"
-            for msg in conversation_history:
-                user_prompt += f"User: {msg['message']}\nAssistant: {msg['response']}\n\n"
-            user_prompt += f"New message: {message}"
-        
-        # Get response from LLM
-        response_text = await self._get_llm_response(user_prompt, system_prompt)
-        
-        # Save conversation
-        if session:
-            try:
-                # Check if table exists, create if not
-                session.execute("""
-                    CREATE TABLE IF NOT EXISTS agent_conversations (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        conversation_id VARCHAR(36) NOT NULL,
-                        company_id INT NOT NULL,
-                        user_id VARCHAR(255) NOT NULL,
-                        message TEXT NOT NULL,
-                        response TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        INDEX (conversation_id),
-                        INDEX (company_id),
-                        INDEX (user_id)
-                    )
-                """)
-                
-                # Insert conversation
-                session.execute("""
-                    INSERT INTO agent_conversations 
-                    (conversation_id, company_id, user_id, message, response)
-                    VALUES (:conversation_id, :company_id, :user_id, :message, :response)
-                """, {
-                    "conversation_id": conversation_id,
-                    "company_id": company_id,
-                    "user_id": user_id,
-                    "message": message,
-                    "response": response_text
-                })
-                
-                session.commit()
-            except Exception as e:
-                logger.error(f"Error saving conversation: {str(e)}")
-                session.rollback()
-        
-        return AgentResponse(
-            message=response_text,
-            conversation_id=conversation_id
+        # Initialize base class with CRM-specific settings
+        super().__init__(
+            agent_type="crm",
+            relevant_tables=crm_tables,
+            fallback_to_sql=True
         )
     
-    async def generate_visualization(
-        self, 
-        query: str, 
-        company_id: int, 
-        user_id: str,
-        visualization_type: Optional[str] = None,
-        session: Optional[Session] = None
-    ) -> VisualizationResult:
-        """Generate CRM visualization.
+    def _get_existing_tables(self) -> List[str]:
+        """Get list of tables that actually exist in the database."""
+        engine = DatabaseConnection.create_engine()
+        with engine.connect() as conn:
+            try:
+                result = conn.execute(text("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = DATABASE()
+                    AND table_type = 'BASE TABLE'
+                """))
+                return [row[0] for row in result]
+            except Exception as e:
+                logger.error(f"Error getting tables: {str(e)}")
+                return []
+    
+    def _generate_system_prompt(self, company_id: int, isolation_instructions: str) -> str:
+        """Generate CRM-specific system prompt.
         
         Args:
-            query: Visualization query
             company_id: Company ID
-            user_id: User ID
-            visualization_type: Optional visualization type
-            session: Optional database session
+            isolation_instructions: Isolation instructions based on table columns
             
         Returns:
-            Visualization result
+            System prompt
         """
-        # Get customer data
-        customers = []
-        if session:
-            try:
-                customers = await DatabaseQueries.get_customer_data(
-                    company_id=company_id,
-                    session=session
-                )
-            except Exception as e:
-                logger.error(f"Error getting customer data: {str(e)}")
-        
-        # Build context
-        context = {
-            "agent_type": "CRM",
-            "user_id": user_id,
-            "visualization_query": query,
-            "visualization_type": visualization_type or "auto",
-            "customer_count": len(customers)
-        }
-        
-        # Add geographic distribution stats if available
-        regions = {}
-        for customer in customers:
-            region = customer.get("billing_state", "Unknown")
-            if region in regions:
-                regions[region] += 1
-            else:
-                regions[region] = 1
-        
-        context["customer_regions"] = regions
-        
-        # Build system prompt with visualization instructions
-        system_prompt = self._generate_system_prompt(company_id, context)
-        system_prompt += """
-You are generating a visualization based on customer data.
-Your response must be valid JSON with the following structure:
-{
-  "chart_type": "bar|line|pie|scatter",
-  "labels": ["Label1", "Label2", ...],
-  "datasets": [
-    {
-      "label": "Dataset Label",
-      "data": [value1, value2, ...],
-      "backgroundColor": "color code(s)"
-    }
-  ],
-  "title": "Chart Title",
-  "description": "Chart Description",
-  "explanation": "Text explanation of the insights from this visualization"
-}
-Respond ONLY with valid JSON. Do not include any other text.
+        return f"""You are a friendly, helpful CRM Assistant working with a company's database.
+You help users query data about customers, leads, deals, etc. in natural, conversational language.
+
+DATA ISOLATION CRITICAL RULE:
+ALWAYS include WHERE created_by = {company_id} in ALL your queries for ALL tables involved.
+This is required for security, no exceptions.
+
+{isolation_instructions}
+
+CRM DATABASE KNOWLEDGE:
+- customers: Contains customer information with fields like name, email, phone, company, etc.
+- clients: Often used interchangeably with customers
+- leads: Prospective customers with fields like name, email, phone, source, status, etc.
+- lead_calls: Call records related to leads with fields like lead_id, subject, call_type, duration, etc.
+- lead_discussions: Discussion comments on leads with fields like lead_id, comment, created_by, etc.
+- lead_emails: Email correspondence related to leads with fields like lead_id, to, subject, description, etc.
+- lead_files: Files attached to leads with fields like lead_id, file_name, file_path, etc.
+- lead_activity_logs: Activity logs for leads with fields like lead_id, user_id, log_type, remark, etc.
+- user_leads: Junction table connecting users to leads
+- deals: Sales opportunities with fields like name, phone, price, pipeline_id, stage_id, status, etc.
+- deal_calls: Call records related to deals with fields like deal_id, subject, call_type, duration, etc.
+- deal_discussions: Discussion comments on deals with fields like deal_id, comment, created_by, etc.
+- deal_emails: Email correspondence related to deals with fields like deal_id, to, subject, description, etc.
+- deal_files: Files attached to deals with fields like deal_id, file_name, file_path, etc.
+- deal_tasks: Tasks related to deals with fields like deal_id, name, date, time, priority, status, etc.
+- client_deals: Junction table connecting clients to deals
+- user_deals: Junction table connecting users to deals
+- lead_stages: Stages in the lead nurturing process with fields like name, order, etc.
+- pipelines: Sales pipelines with fields like name, etc.
+- stages: Stages in the sales process with fields like name, pipeline_id, order, etc.
+- supports/bugs: Support tickets with fields like customer_id, subject, status, priority, etc.
+- contracts: Customer contracts with fields like customer_id, type_id, value, start_date, end_date, etc.
+- proposals: Sales proposals with fields like customer_id, amount, status, etc.
+- invoices: Customer invoices with fields like customer_id, amount, status, etc.
+
+JOIN RELATIONSHIPS:
+- deals.customer_id connects to customers.id
+- deals.stage_id connects to stages.id
+- deal_calls.deal_id connects to deals.id
+- deal_discussions.deal_id connects to deals.id
+- deal_emails.deal_id connects to deals.id
+- deal_files.deal_id connects to deals.id
+- deal_tasks.deal_id connects to deals.id
+- client_deals connects clients.id to deals.id
+- user_deals connects users.id to deals.id
+- lead_calls.lead_id connects to leads.id
+- lead_discussions.lead_id connects to leads.id
+- lead_emails.lead_id connects to leads.id
+- lead_files.lead_id connects to leads.id
+- lead_activity_logs.lead_id connects to leads.id
+- user_leads connects users.id to leads.id
+- stages.pipeline_id connects to pipelines.id
+- leads.stage_id connects to lead_stages.id
+- supports.customer_id connects to customers.id
+- proposals.customer_id connects to customers.id
+- contracts.customer_id connects to customers.id
+- contracts.type_id connects to contract_types.id
+- invoices.customer_id connects to customers.id
+
+CRM METRICS KNOWLEDGE:
+- Lead Conversion Rate: Percentage of leads converted to customers
+- Deal Close Rate: Percentage of deals won
+- Average Deal Size: Average amount of closed deals
+- Customer Lifetime Value: Average total revenue from a customer
+- Customer Acquisition Cost: Average cost to acquire a new customer
+- Sales Cycle Length: Average time from lead to closed deal
+- Customer Retention Rate: Percentage of customers retained year over year
+
+IMPORTANT GUIDELINES:
+1. NEVER make up information. Only return data that actually exists in the database.
+2. If you don't find relevant data, clearly say so rather than making up a response.
+3. Present your answers in a clear, concise way for business users.
+4. NEVER reveal SQL queries to the end user - only show the information they asked for.
+5. Format your responses in a readable way, with proper capitalization and punctuation.
+6. When appropriate, format customer data in tables for clarity.
+7. For questions about lead counts, sales funnel, deal stages, or customer metrics,
+   consider if a visualization might help the user understand the data better.
+8. ALWAYS RESOLVE IDs to actual names when presenting data. For example, show customer names instead of customer_ids.
+
+USE DATABASE TOOLS ALWAYS:
+- When asked about customers, leads, deals, or any CRM data, ALWAYS search the database for real data.
+- Never fabricate information or say "I would need to search the database" - actually search it.
+- Use SQL queries to get actual data for every information request.
+- If data doesn't exist, clearly state that no matching records were found.
+
+Today's date is {self._get_current_date()}
 """
-        
-        # Build user prompt
-        user_prompt = f"Generate a visualization for: {query}\n"
-        if visualization_type:
-            user_prompt += f"Visualization type: {visualization_type}\n"
-        
-        user_prompt += f"Customer data summary: {len(customers)} customers, {len(regions)} regions\n"
-        user_prompt += f"Region breakdown: {json.dumps(regions)}"
-        
-        # Get response from LLM
-        response_text = await self._get_llm_response(user_prompt, system_prompt)
-        
-        # Parse JSON response
-        try:
-            response_json = json.loads(response_text)
-            
-            # Extract explanation from the JSON
-            explanation = response_json.pop("explanation", "No explanation provided.")
-            
-            # Return visualization data
-            return VisualizationResult(
-                data=response_json,
-                explanation=explanation
-            )
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parsing visualization JSON: {str(e)}")
-            
-            # Fallback to simple visualization if JSON parsing fails
-            fallback_data = {
-                "chart_type": visualization_type or "pie",
-                "labels": list(regions.keys()),
-                "datasets": [{
-                    "label": "Customer Count",
-                    "data": list(regions.values()),
-                    "backgroundColor": ["rgba(255, 99, 132, 0.5)", "rgba(54, 162, 235, 0.5)", 
-                                       "rgba(255, 206, 86, 0.5)", "rgba(75, 192, 192, 0.5)", 
-                                       "rgba(153, 102, 255, 0.5)"]
-                }],
-                "title": "Customer Distribution by Region",
-                "description": "Number of customers in each region"
-            }
-            
-            return VisualizationResult(
-                data=fallback_data,
-                explanation="This chart shows the distribution of customers across different regions."
-            )
     
     async def perform_action(
         self, 
@@ -270,7 +189,7 @@ Respond ONLY with valid JSON. Do not include any other text.
         user_id: str,
         session: Optional[Session] = None
     ) -> ActionResult:
-        """Perform CRM action.
+        """Perform CRM-related action.
         
         Args:
             action: Action to perform
@@ -282,258 +201,51 @@ Respond ONLY with valid JSON. Do not include any other text.
         Returns:
             Action result
         """
-        # Map of supported actions
-        supported_actions = {
-            "add_customer": self._add_customer,
-            "update_customer": self._update_customer,
-            "delete_customer": self._delete_customer,
-        }
-        
-        # Check if action is supported
-        if action not in supported_actions:
-            return ActionResult(
-                success=False,
-                message=f"Unsupported action: {action}",
-                data={"supported_actions": list(supported_actions.keys())}
-            )
-        
-        # Perform action
-        try:
-            if not session:
-                return ActionResult(
-                    success=False,
-                    message="Database session is required for actions"
-                )
-            
-            # Call the appropriate action method
-            result = await supported_actions[action](
-                parameters=parameters,
-                company_id=company_id,
-                user_id=user_id,
-                session=session
-            )
-            
-            return result
-        except Exception as e:
-            logger.error(f"Error performing action {action}: {str(e)}")
-            return ActionResult(
-                success=False,
-                message=f"Error performing action: {str(e)}"
-            )
+        # Only supporting read-only actions for now
+        return ActionResult(
+            success=False,
+            message="CRM action support is coming soon. Currently, only read-only operations are supported."
+        )
     
-    async def _add_customer(
-        self, 
-        parameters: Dict[str, Any], 
-        company_id: int, 
-        user_id: str,
-        session: Session
-    ) -> ActionResult:
-        """Add customer action.
+    def _clean_technical_references(self, text: str) -> str:
+        """Clean technical references from text.
         
         Args:
-            parameters: Action parameters
-            company_id: Company ID
-            user_id: User ID
-            session: Database session
+            text: Text to clean
             
         Returns:
-            Action result
+            Cleaned text
         """
-        # Required parameters
-        required_params = ["name", "email", "contact"]
+        # Remove SQL query sections
+        text = re.sub(r"```sql\s*.*?\s*```", "", text, flags=re.DOTALL)
         
-        # Check required parameters
-        missing_params = [param for param in required_params if param not in parameters]
-        if missing_params:
-            return ActionResult(
-                success=False,
-                message=f"Missing required parameters: {', '.join(missing_params)}",
-                data={"required_parameters": required_params}
-            )
+        # Remove other code blocks
+        text = re.sub(r"```\s*.*?\s*```", "", text, flags=re.DOTALL)
         
-        try:
-            # Execute SQL to insert customer
-            result = session.execute("""
-                INSERT INTO customers (
-                    name, email, contact, company_id, created_by
-                ) VALUES (
-                    :name, :email, :contact, :company_id, :created_by
-                )
-            """, {
-                "name": parameters["name"],
-                "email": parameters["email"],
-                "contact": parameters["contact"],
-                "company_id": company_id,
-                "created_by": user_id
-            })
-            
-            session.commit()
-            
-            # Get the inserted customer ID
-            customer_id = result.lastrowid
-            
-            return ActionResult(
-                success=True,
-                message=f"Customer {parameters['name']} added successfully",
-                data={"customer_id": customer_id, "name": parameters["name"], "email": parameters["email"]}
-            )
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Error adding customer: {str(e)}")
-            return ActionResult(
-                success=False,
-                message=f"Error adding customer: {str(e)}"
-            )
-    
-    async def _update_customer(
-        self, 
-        parameters: Dict[str, Any], 
-        company_id: int, 
-        user_id: str,
-        session: Session
-    ) -> ActionResult:
-        """Update customer action.
+        # Remove inline SQL
+        text = re.sub(r"`SELECT.*?;`", "", text, flags=re.DOTALL)
         
-        Args:
-            parameters: Action parameters
-            company_id: Company ID
-            user_id: User ID
-            session: Database session
-            
-        Returns:
-            Action result
-        """
-        # Required parameters
-        required_params = ["customer_id"]
+        # Remove technical phrases
+        technical_phrases = [
+            "query the database",
+            "execute a query",
+            "run a query",
+            "SQL query",
+            "database query",
+            "query results",
+            "database results",
+            "database shows",
+            "according to the database",
+            "from the database",
+            "database records",
+            "queried the"
+        ]
         
-        # Check required parameters
-        missing_params = [param for param in required_params if param not in parameters]
-        if missing_params:
-            return ActionResult(
-                success=False,
-                message=f"Missing required parameters: {', '.join(missing_params)}",
-                data={"required_parameters": required_params}
-            )
+        for phrase in technical_phrases:
+            text = text.replace(phrase, "")
         
-        # Get updatable fields
-        updatable_fields = ["name", "email", "contact", "billing_name", "billing_address", 
-                           "billing_city", "billing_state", "billing_country", "billing_phone"]
+        # Consolidate multiple newlines and spaces
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        text = re.sub(r"\s{2,}", " ", text)
         
-        # Build update SET clause
-        update_fields = [f"{field} = :{field}" for field in updatable_fields if field in parameters]
-        
-        if not update_fields:
-            return ActionResult(
-                success=False,
-                message="No fields to update provided",
-                data={"updatable_fields": updatable_fields}
-            )
-        
-        try:
-            # Verify customer belongs to company
-            customer = await DatabaseQueries.get_customer_data(
-                company_id=company_id,
-                customer_id=parameters["customer_id"],
-                session=session
-            )
-            
-            if not customer:
-                return ActionResult(
-                    success=False,
-                    message=f"Customer with ID {parameters['customer_id']} not found or does not belong to this company"
-                )
-            
-            # Build SQL parameters
-            sql_params = {field: parameters[field] for field in updatable_fields if field in parameters}
-            sql_params["customer_id"] = parameters["customer_id"]
-            sql_params["company_id"] = company_id
-            
-            # Execute SQL to update customer
-            session.execute(f"""
-                UPDATE customers
-                SET {', '.join(update_fields)}
-                WHERE id = :customer_id AND company_id = :company_id
-            """, sql_params)
-            
-            session.commit()
-            
-            return ActionResult(
-                success=True,
-                message=f"Customer with ID {parameters['customer_id']} updated successfully",
-                data={"customer_id": parameters["customer_id"], "updated_fields": list(set(sql_params.keys()) - {"customer_id", "company_id"})}
-            )
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Error updating customer: {str(e)}")
-            return ActionResult(
-                success=False,
-                message=f"Error updating customer: {str(e)}"
-            )
-    
-    async def _delete_customer(
-        self, 
-        parameters: Dict[str, Any], 
-        company_id: int, 
-        user_id: str,
-        session: Session
-    ) -> ActionResult:
-        """Delete customer action.
-        
-        Args:
-            parameters: Action parameters
-            company_id: Company ID
-            user_id: User ID
-            session: Database session
-            
-        Returns:
-            Action result
-        """
-        # Required parameters
-        required_params = ["customer_id"]
-        
-        # Check required parameters
-        missing_params = [param for param in required_params if param not in parameters]
-        if missing_params:
-            return ActionResult(
-                success=False,
-                message=f"Missing required parameters: {', '.join(missing_params)}",
-                data={"required_parameters": required_params}
-            )
-        
-        try:
-            # Verify customer belongs to company
-            customer = await DatabaseQueries.get_customer_data(
-                company_id=company_id,
-                customer_id=parameters["customer_id"],
-                session=session
-            )
-            
-            if not customer:
-                return ActionResult(
-                    success=False,
-                    message=f"Customer with ID {parameters['customer_id']} not found or does not belong to this company"
-                )
-            
-            # Execute SQL to delete customer
-            session.execute("""
-                DELETE FROM customers
-                WHERE id = :customer_id AND company_id = :company_id
-            """, {
-                "customer_id": parameters["customer_id"],
-                "company_id": company_id
-            })
-            
-            session.commit()
-            
-            return ActionResult(
-                success=True,
-                message=f"Customer with ID {parameters['customer_id']} deleted successfully",
-                data={"customer_id": parameters["customer_id"]}
-            )
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Error deleting customer: {str(e)}")
-            return ActionResult(
-                success=False,
-                message=f"Error deleting customer: {str(e)}"
-            ) 
+        return text.strip() 

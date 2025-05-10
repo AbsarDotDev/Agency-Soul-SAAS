@@ -136,3 +136,43 @@ This project is built with Python and uses the following technologies:
 - Google Gemini 2.5 Pro as the LLM provider
 - FastAPI for the API interface
 - SQLAlchemy for database interactions
+
+## Running with Conda Environment
+
+The application uses LangGraph which has specific dependencies. We've set up a conda environment named `nomessos` to manage these dependencies.
+
+### Using the run script
+
+The easiest way to run the application is to use the provided run script:
+
+```bash
+./run_app.sh
+```
+
+This script will:
+1. Activate the `nomessos` conda environment
+2. Start the FastAPI application
+
+### Manual setup
+
+If you prefer to set up things manually:
+
+1. Activate the conda environment:
+   ```bash
+   conda activate nomessos
+   ```
+
+2. Run the application:
+   ```bash
+   python main.py
+   ```
+
+### Testing imports
+
+To verify that your conda environment is correctly set up, you can run:
+
+```bash
+python test_imports.py
+```
+
+This will test all the necessary imports and confirm that the environment is correctly configured.

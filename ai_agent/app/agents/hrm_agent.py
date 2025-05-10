@@ -3,263 +3,190 @@ from sqlalchemy.orm import Session
 import logging
 import uuid
 import json
+import re
+# Import message types from langchain directly
+from langchain_core.messages import SystemMessage, HumanMessage
+from sqlalchemy import text
 
 from app.agents.base_agent import BaseAgent, AgentResponse, VisualizationResult, ActionResult
 from app.database.queries import DatabaseQueries
+from app.database.connection import get_company_isolated_sql_database, DatabaseConnection
+from app.core.llm import get_llm
+from app.agents.specialized_agent_base import SpecializedAgentBase
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-class HRMAgent(BaseAgent):
-    """HRM agent for handling human resource management related queries."""
+class HRMAgent(SpecializedAgentBase):
+    """HRM agent for handling human resource management queries using database access."""
     
-    async def process_message(
-        self, 
-        message: str, 
-        company_id: int, 
-        user_id: str,
-        conversation_id: Optional[str] = None,
-        session: Optional[Session] = None
-    ) -> AgentResponse:
-        """Process HRM related message.
+    def __init__(self):
+        """Initialize HRM agent with relevant tables."""
+        # Check which tables actually exist in the database
+        existing_tables = self._get_existing_tables()
         
-        Args:
-            message: User message
-            company_id: Company ID
-            user_id: User ID
-            conversation_id: Optional conversation ID
-            session: Optional database session
-            
-        Returns:
-            Agent response
-        """
-        # Generate new conversation ID if not provided
-        if not conversation_id:
-            conversation_id = str(uuid.uuid4())
+        # Define tables relevant to HRM
+        hrm_tables = [
+            "employees",
+            "departments",
+            "designations", 
+            "branches",
+            "leaves",
+            "leave_types",
+            "attendance_employees",
+            "awards",
+            "award_types",
+            "transfers",
+            "resignations",
+            "travels",
+            "promotions",
+            "complaints",
+            "warnings",
+            "terminations",
+            "termination_types",
+            "training",
+            "trainers",
+            "training_types",
+            "document_types",
+            "job_categories",
+            "job_stages",
+            "jobs",
+            "job_applications",
+            "meetings",
+            "events",
+            "announcements",
+            "holidays",
+            "indicators",
+            "appraisals"
+        ]
         
-        # Get conversation history if conversation ID is provided
-        conversation_history = []
-        if conversation_id and session:
-            conversation_history = await self._get_conversation_history(
-                conversation_id=conversation_id,
-                company_id=company_id,
-                session=session
-            )
+        # Filter to tables that actually exist in the database
+        hrm_tables = [table for table in hrm_tables if table in existing_tables]
         
-        # Build chat context
-        context = {
-            "agent_type": "HRM",
-            "user_id": user_id,
-        }
-        
-        # Get company information
-        company_info = None
-        if session:
-            try:
-                company_info = await DatabaseQueries.get_company_info(
-                    company_id=company_id,
-                    session=session
-                )
-                context["company_name"] = company_info.get("company_name", "")
-            except Exception as e:
-                logger.error(f"Error getting company info: {str(e)}")
-        
-        # Get employee data for context
-        try:
-            if session:
-                employees = await DatabaseQueries.get_employee_data(
-                    company_id=company_id,
-                    session=session
-                )
-                context["employee_count"] = len(employees)
-                
-                # Add department stats
-                departments = {}
-                for emp in employees:
-                    dept_name = emp.get("department_name", "Unknown")
-                    if dept_name in departments:
-                        departments[dept_name] += 1
-                    else:
-                        departments[dept_name] = 1
-                
-                context["departments"] = departments
-        except Exception as e:
-            logger.error(f"Error getting employee data: {str(e)}")
-        
-        # Build system prompt
-        system_prompt = self._generate_system_prompt(company_id, context)
-        
-        # Build user prompt with conversation history
-        user_prompt = message
-        if conversation_history:
-            user_prompt = f"Conversation history:\n"
-            for msg in conversation_history:
-                user_prompt += f"User: {msg['message']}\nAssistant: {msg['response']}\n\n"
-            user_prompt += f"New message: {message}"
-        
-        # Get response from LLM
-        response_text = await self._get_llm_response(user_prompt, system_prompt)
-        
-        # Save conversation
-        if session:
-            try:
-                # Check if table exists, create if not
-                session.execute("""
-                    CREATE TABLE IF NOT EXISTS agent_conversations (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        conversation_id VARCHAR(36) NOT NULL,
-                        company_id INT NOT NULL,
-                        user_id VARCHAR(255) NOT NULL,
-                        message TEXT NOT NULL,
-                        response TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        INDEX (conversation_id),
-                        INDEX (company_id),
-                        INDEX (user_id)
-                    )
-                """)
-                
-                # Insert conversation
-                session.execute("""
-                    INSERT INTO agent_conversations 
-                    (conversation_id, company_id, user_id, message, response)
-                    VALUES (:conversation_id, :company_id, :user_id, :message, :response)
-                """, {
-                    "conversation_id": conversation_id,
-                    "company_id": company_id,
-                    "user_id": user_id,
-                    "message": message,
-                    "response": response_text
-                })
-                
-                session.commit()
-            except Exception as e:
-                logger.error(f"Error saving conversation: {str(e)}")
-                session.rollback()
-        
-        return AgentResponse(
-            message=response_text,
-            conversation_id=conversation_id
+        # Initialize base class with HRM-specific settings
+        super().__init__(
+            agent_type="hrm",
+            relevant_tables=hrm_tables,
+            fallback_to_sql=True
         )
     
-    async def generate_visualization(
-        self, 
-        query: str, 
-        company_id: int, 
-        user_id: str,
-        visualization_type: Optional[str] = None,
-        session: Optional[Session] = None
-    ) -> VisualizationResult:
-        """Generate HRM visualization.
+    def _get_existing_tables(self) -> List[str]:
+        """Get list of tables that actually exist in the database."""
+        engine = DatabaseConnection.create_engine()
+        with engine.connect() as conn:
+            try:
+                result = conn.execute(text("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = DATABASE()
+                    AND table_type = 'BASE TABLE'
+                """))
+                return [row[0] for row in result]
+            except Exception as e:
+                logger.error(f"Error getting tables: {str(e)}")
+                return []
+    
+    def _generate_system_prompt(self, company_id: int, isolation_instructions: str) -> str:
+        """Generate HRM-specific system prompt.
         
         Args:
-            query: Visualization query
             company_id: Company ID
-            user_id: User ID
-            visualization_type: Optional visualization type
-            session: Optional database session
+            isolation_instructions: Isolation instructions based on table columns
             
         Returns:
-            Visualization result
+            System prompt
         """
-        # Get employee data
-        employees = []
-        if session:
-            try:
-                employees = await DatabaseQueries.get_employee_data(
-                    company_id=company_id,
-                    session=session
-                )
-            except Exception as e:
-                logger.error(f"Error getting employee data: {str(e)}")
-        
-        # Build context
-        context = {
-            "agent_type": "HRM",
-            "user_id": user_id,
-            "visualization_query": query,
-            "visualization_type": visualization_type or "auto",
-            "employee_count": len(employees)
-        }
-        
-        # Add department stats
-        departments = {}
-        for emp in employees:
-            dept_name = emp.get("department_name", "Unknown")
-            if dept_name in departments:
-                departments[dept_name] += 1
-            else:
-                departments[dept_name] = 1
-        
-        context["departments"] = departments
-        
-        # Build system prompt with visualization instructions
-        system_prompt = self._generate_system_prompt(company_id, context)
-        system_prompt += """
-You are generating a visualization based on HR data.
-Your response must be valid JSON with the following structure:
-{
-  "chart_type": "bar|line|pie|scatter",
-  "labels": ["Label1", "Label2", ...],
-  "datasets": [
-    {
-      "label": "Dataset Label",
-      "data": [value1, value2, ...],
-      "backgroundColor": "color code(s)"
-    }
-  ],
-  "title": "Chart Title",
-  "description": "Chart Description",
-  "explanation": "Text explanation of the insights from this visualization"
-}
-Respond ONLY with valid JSON. Do not include any other text.
+        return f"""You are a friendly, helpful HRM Assistant working with a company's database.
+You help users query data about employees, departments, attendance, etc. in natural, conversational language.
+
+DATA ISOLATION CRITICAL RULE:
+ALWAYS include WHERE created_by = {company_id} in ALL your queries for ALL tables involved.
+This is required for security, no exceptions.
+
+{isolation_instructions}
+
+HRM DATABASE KNOWLEDGE:
+- employees: Contains employee information with fields like name, email, phone, department_id, designation_id, etc.
+- departments: Contains department information with fields like name, etc.
+- designations: Contains job title/role information with fields like name, etc.
+- branches: Contains company location information with fields like name, etc.
+- leaves: Contains employee leave records with fields like employee_id, leave_type_id, start_date, end_date, etc.
+- leave_types: Contains leave type information with fields like name, days, etc.
+- attendance_employees: Contains employee attendance records with fields like employee_id, date, status, etc.
+- awards: Contains employee award records with fields like employee_id, award_type_id, date, etc.
+- award_types: Contains award type information with fields like name, etc.
+- transfers: Contains employee transfer records with fields like employee_id, from_department_id, to_department_id, date, etc.
+- resignations: Contains employee resignation records with fields like employee_id, notice_date, resignation_date, etc.
+- travels: Contains employee travel records with fields like employee_id, start_date, end_date, purpose, etc.
+- promotions: Contains employee promotion records with fields like employee_id, from_designation_id, to_designation_id, date, etc.
+- complaints: Contains employee complaints with fields like from_employee_id, against_employee_id, date, etc.
+- warnings: Contains employee warning records with fields like employee_id, subject, date, etc.
+- terminations: Contains employee termination records with fields like employee_id, termination_type_id, date, etc.
+- termination_types: Contains termination type information with fields like name, etc.
+- training: Contains employee training records with fields like trainer_id, training_type_id, start_date, end_date, etc.
+- trainers: Contains trainer information with fields like name, etc.
+- training_types: Contains training type information with fields like name, etc.
+
+JOIN RELATIONSHIPS:
+- employees.department_id connects to departments.id
+- employees.designation_id connects to designations.id
+- employees.branch_id connects to branches.id
+- leaves.employee_id connects to employees.id
+- leaves.leave_type_id connects to leave_types.id
+- attendance_employees.employee_id connects to employees.id
+- awards.employee_id connects to employees.id
+- awards.award_type_id connects to award_types.id
+- transfers.employee_id connects to employees.id
+- resignations.employee_id connects to employees.id
+- travels.employee_id connects to employees.id
+- promotions.employee_id connects to employees.id
+- complaints.from_employee_id and complaints.against_employee_id connect to employees.id
+- warnings.employee_id connects to employees.id
+- terminations.employee_id connects to employees.id
+- terminations.termination_type_id connects to termination_types.id
+- training.trainer_id connects to trainers.id
+- training.training_type_id connects to training_types.id
+
+HRM METRICS KNOWLEDGE:
+- Employee Turnover Rate: Percentage of employees who left the company
+- Employee Retention Rate: Percentage of employees who stayed with the company
+- Average Tenure: Average time employees stay with the company
+- Time to Fill: Average time to fill a job position
+- Time to Hire: Average time from job application to job offer
+- Absence Rate: Percentage of workdays missed due to absence
+- Training Completion Rate: Percentage of employees who completed training
+- Training Effectiveness: Improvement in job performance after training
+- Employee Satisfaction: Employee feedback on job satisfaction
+- Performance Rating: Employee performance evaluation scores
+
+IMPORTANT GUIDELINES:
+1. NEVER make up information. Only return data that actually exists in the database.
+2. If you don't find relevant data, clearly say so rather than making up a response.
+3. Present your answers in a clear, concise way for business users.
+4. NEVER reveal SQL queries to the end user - only show the information they asked for.
+5. Format your responses in a readable way, with proper capitalization and punctuation.
+6. When appropriate, format employee data in tables for clarity.
+7. For questions about department sizes, attendance rates, leave statistics, or employee metrics,
+   consider if a visualization might help the user understand the data better.
+8. ALWAYS RESOLVE IDs to actual names when presenting data. For example, show department names instead of department_ids.
+
+ID RESOLUTION - ALWAYS FOLLOW THIS RULE:
+When your query returns IDs (like department_id, employee_id, etc.), ALWAYS perform additional queries to resolve these IDs into human-readable names.
+Example:
+1. If your first query returns a department_id = 5, run a second query: "SELECT name FROM departments WHERE id = 5 AND created_by = {company_id}"
+2. Then replace "department_id: 5" with "Department: [actual department name]" in your response
+3. Do this for ALL foreign key IDs in your results to make the information user-friendly
+
+USE DATABASE TOOLS ALWAYS:
+- When asked about employees, departments, attendance, or any HR data, ALWAYS search the database for real data.
+- Never fabricate information or say "I would need to search the database" - actually search it.
+- Use SQL queries to get actual data for every information request.
+- If data doesn't exist, clearly state that no matching records were found.
+
+Today's date is {self._get_current_date()}
 """
-        
-        # Build user prompt
-        user_prompt = f"Generate a visualization for: {query}\n"
-        if visualization_type:
-            user_prompt += f"Visualization type: {visualization_type}\n"
-        
-        user_prompt += f"Employee data summary: {len(employees)} employees, {len(departments)} departments\n"
-        user_prompt += f"Department breakdown: {json.dumps(departments)}"
-        
-        # Get response from LLM
-        response_text = await self._get_llm_response(user_prompt, system_prompt)
-        
-        # Parse JSON response
-        try:
-            response_json = json.loads(response_text)
-            
-            # Extract explanation from the JSON
-            explanation = response_json.pop("explanation", "No explanation provided.")
-            
-            # Return visualization data
-            return VisualizationResult(
-                data=response_json,
-                explanation=explanation
-            )
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parsing visualization JSON: {str(e)}")
-            
-            # Fallback to simple visualization if JSON parsing fails
-            fallback_data = {
-                "chart_type": visualization_type or "bar",
-                "labels": list(departments.keys()),
-                "datasets": [{
-                    "label": "Employee Count",
-                    "data": list(departments.values()),
-                    "backgroundColor": "rgba(54, 162, 235, 0.5)"
-                }],
-                "title": "Employee Distribution by Department",
-                "description": "Number of employees in each department"
-            }
-            
-            return VisualizationResult(
-                data=fallback_data,
-                explanation="This chart shows the distribution of employees across departments."
-            )
-    
+
     async def perform_action(
         self, 
         action: str, 
@@ -268,7 +195,7 @@ Respond ONLY with valid JSON. Do not include any other text.
         user_id: str,
         session: Optional[Session] = None
     ) -> ActionResult:
-        """Perform HRM action.
+        """Perform HRM-related action.
         
         Args:
             action: Action to perform
@@ -280,256 +207,51 @@ Respond ONLY with valid JSON. Do not include any other text.
         Returns:
             Action result
         """
-        # Map of supported actions
-        supported_actions = {
-            "add_employee": self._add_employee,
-            "update_employee": self._update_employee,
-            "delete_employee": self._delete_employee,
-        }
-        
-        # Check if action is supported
-        if action not in supported_actions:
-            return ActionResult(
-                success=False,
-                message=f"Unsupported action: {action}",
-                data={"supported_actions": list(supported_actions.keys())}
-            )
-        
-        # Perform action
-        try:
-            if not session:
-                return ActionResult(
-                    success=False,
-                    message="Database session is required for actions"
-                )
-            
-            # Call the appropriate action method
-            result = await supported_actions[action](
-                parameters=parameters,
-                company_id=company_id,
-                user_id=user_id,
-                session=session
-            )
-            
-            return result
-        except Exception as e:
-            logger.error(f"Error performing action {action}: {str(e)}")
-            return ActionResult(
-                success=False,
-                message=f"Error performing action: {str(e)}"
-            )
+        # Only supporting read-only actions for now
+        return ActionResult(
+            success=False,
+            message="HRM action support is coming soon. Currently, only read-only operations are supported."
+        )
     
-    async def _add_employee(
-        self, 
-        parameters: Dict[str, Any], 
-        company_id: int, 
-        user_id: str,
-        session: Session
-    ) -> ActionResult:
-        """Add employee action.
+    def _clean_technical_references(self, text: str) -> str:
+        """Clean technical references from text.
         
         Args:
-            parameters: Action parameters
-            company_id: Company ID
-            user_id: User ID
-            session: Database session
+            text: Text to clean
             
         Returns:
-            Action result
+            Cleaned text
         """
-        # Required parameters
-        required_params = ["name", "email"]
+        # Remove SQL query sections
+        text = re.sub(r"```sql\s*.*?\s*```", "", text, flags=re.DOTALL)
         
-        # Check required parameters
-        missing_params = [param for param in required_params if param not in parameters]
-        if missing_params:
-            return ActionResult(
-                success=False,
-                message=f"Missing required parameters: {', '.join(missing_params)}",
-                data={"required_parameters": required_params}
-            )
+        # Remove other code blocks
+        text = re.sub(r"```\s*.*?\s*```", "", text, flags=re.DOTALL)
         
-        try:
-            # Execute SQL to insert employee
-            result = session.execute("""
-                INSERT INTO employees (
-                    name, email, company_id, created_by
-                ) VALUES (
-                    :name, :email, :company_id, :created_by
-                )
-            """, {
-                "name": parameters["name"],
-                "email": parameters["email"],
-                "company_id": company_id,
-                "created_by": user_id
-            })
-            
-            session.commit()
-            
-            # Get the inserted employee ID
-            employee_id = result.lastrowid
-            
-            return ActionResult(
-                success=True,
-                message=f"Employee {parameters['name']} added successfully",
-                data={"employee_id": employee_id, "name": parameters["name"], "email": parameters["email"]}
-            )
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Error adding employee: {str(e)}")
-            return ActionResult(
-                success=False,
-                message=f"Error adding employee: {str(e)}"
-            )
-    
-    async def _update_employee(
-        self, 
-        parameters: Dict[str, Any], 
-        company_id: int, 
-        user_id: str,
-        session: Session
-    ) -> ActionResult:
-        """Update employee action.
+        # Remove inline SQL
+        text = re.sub(r"`SELECT.*?;`", "", text, flags=re.DOTALL)
         
-        Args:
-            parameters: Action parameters
-            company_id: Company ID
-            user_id: User ID
-            session: Database session
-            
-        Returns:
-            Action result
-        """
-        # Required parameters
-        required_params = ["employee_id"]
+        # Remove technical phrases
+        technical_phrases = [
+            "query the database",
+            "execute a query",
+            "run a query",
+            "SQL query",
+            "database query",
+            "query results",
+            "database results",
+            "database shows",
+            "according to the database",
+            "from the database",
+            "database records",
+            "queried the"
+        ]
         
-        # Check required parameters
-        missing_params = [param for param in required_params if param not in parameters]
-        if missing_params:
-            return ActionResult(
-                success=False,
-                message=f"Missing required parameters: {', '.join(missing_params)}",
-                data={"required_parameters": required_params}
-            )
+        for phrase in technical_phrases:
+            text = text.replace(phrase, "")
         
-        # Get updatable fields
-        updatable_fields = ["name", "email", "phone", "department_id", "designation_id", "salary"]
+        # Consolidate multiple newlines and spaces
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        text = re.sub(r"\s{2,}", " ", text)
         
-        # Build update SET clause
-        update_fields = [f"{field} = :{field}" for field in updatable_fields if field in parameters]
-        
-        if not update_fields:
-            return ActionResult(
-                success=False,
-                message="No fields to update provided",
-                data={"updatable_fields": updatable_fields}
-            )
-        
-        try:
-            # Verify employee belongs to company
-            employee = await DatabaseQueries.get_employee_data(
-                company_id=company_id,
-                employee_id=parameters["employee_id"],
-                session=session
-            )
-            
-            if not employee:
-                return ActionResult(
-                    success=False,
-                    message=f"Employee with ID {parameters['employee_id']} not found or does not belong to this company"
-                )
-            
-            # Build SQL parameters
-            sql_params = {field: parameters[field] for field in updatable_fields if field in parameters}
-            sql_params["employee_id"] = parameters["employee_id"]
-            sql_params["company_id"] = company_id
-            
-            # Execute SQL to update employee
-            session.execute(f"""
-                UPDATE employees
-                SET {', '.join(update_fields)}
-                WHERE id = :employee_id AND company_id = :company_id
-            """, sql_params)
-            
-            session.commit()
-            
-            return ActionResult(
-                success=True,
-                message=f"Employee with ID {parameters['employee_id']} updated successfully",
-                data={"employee_id": parameters["employee_id"], "updated_fields": list(sql_params.keys())}
-            )
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Error updating employee: {str(e)}")
-            return ActionResult(
-                success=False,
-                message=f"Error updating employee: {str(e)}"
-            )
-    
-    async def _delete_employee(
-        self, 
-        parameters: Dict[str, Any], 
-        company_id: int, 
-        user_id: str,
-        session: Session
-    ) -> ActionResult:
-        """Delete employee action.
-        
-        Args:
-            parameters: Action parameters
-            company_id: Company ID
-            user_id: User ID
-            session: Database session
-            
-        Returns:
-            Action result
-        """
-        # Required parameters
-        required_params = ["employee_id"]
-        
-        # Check required parameters
-        missing_params = [param for param in required_params if param not in parameters]
-        if missing_params:
-            return ActionResult(
-                success=False,
-                message=f"Missing required parameters: {', '.join(missing_params)}",
-                data={"required_parameters": required_params}
-            )
-        
-        try:
-            # Verify employee belongs to company
-            employee = await DatabaseQueries.get_employee_data(
-                company_id=company_id,
-                employee_id=parameters["employee_id"],
-                session=session
-            )
-            
-            if not employee:
-                return ActionResult(
-                    success=False,
-                    message=f"Employee with ID {parameters['employee_id']} not found or does not belong to this company"
-                )
-            
-            # Execute SQL to delete employee
-            session.execute("""
-                DELETE FROM employees
-                WHERE id = :employee_id AND company_id = :company_id
-            """, {
-                "employee_id": parameters["employee_id"],
-                "company_id": company_id
-            })
-            
-            session.commit()
-            
-            return ActionResult(
-                success=True,
-                message=f"Employee with ID {parameters['employee_id']} deleted successfully",
-                data={"employee_id": parameters["employee_id"]}
-            )
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Error deleting employee: {str(e)}")
-            return ActionResult(
-                success=False,
-                message=f"Error deleting employee: {str(e)}"
-            )
+        return text.strip()

@@ -4,308 +4,254 @@ from sqlalchemy.exc import SQLAlchemyError
 import logging
 import uuid
 import json
+import re
 from fastapi import HTTPException
+# Import message types from langchain directly
+from langchain_core.messages import SystemMessage, HumanMessage
+from sqlalchemy import text
 
 from app.agents.base_agent import BaseAgent, AgentResponse, VisualizationResult, ActionResult
 from app.database.queries import DatabaseQueries
+from app.database.connection import get_company_isolated_sql_database, DatabaseConnection
+from app.core.llm import get_llm
+from app.agents.specialized_agent_base import SpecializedAgentBase
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-class FinanceAgent(BaseAgent):
-    """Finance agent for handling financial data related queries."""
-
-    async def process_message(
-        self,
-        message: str,
-        company_id: int,
-        user_id: str,
-        conversation_id: Optional[str] = None,
-        session: Optional[Session] = None
-    ) -> AgentResponse:
-        """Process finance related message."""
-        if not conversation_id:
-            conversation_id = str(uuid.uuid4())
-
-        conversation_history = []
-        if conversation_id and session:
-            conversation_history = await self._get_conversation_history(
-                conversation_id=conversation_id,
-                company_id=company_id,
-                session=session
-            )
-
-        context = {
-            "agent_type": "Finance",
-            "user_id": user_id,
-        }
-
-        # Fetch relevant financial context using DatabaseQueries
-        try:
-            if session:
-                financial_summary = await DatabaseQueries.get_financial_summary(company_id, session)
-                context.update(financial_summary)
-        except HTTPException as e:
-            # Handle potential DB errors from queries gracefully
-             logger.error(f"HTTP error getting financial context: {e.detail}")
-             context["error"] = f"Could not retrieve financial summary: {e.detail}"
-        except Exception as e:
-            logger.error(f"Unexpected error getting financial context: {str(e)}")
-            context["error"] = "An unexpected error occurred while fetching financial data."
-
-
-        system_prompt = self._generate_system_prompt(company_id, context)
-        user_prompt = self._build_user_prompt_with_history(message, conversation_history)
-
-        response_text = await self._get_llm_response(user_prompt, system_prompt)
-
-        await self._save_conversation(
-            conversation_id=conversation_id,
-            company_id=company_id,
-            user_id=user_id,
-            message=message,
-            response=response_text,
-            session=session
+class FinanceAgent(SpecializedAgentBase):
+    """Finance agent for handling financial and sales data queries and analysis using database access."""
+    
+    def __init__(self):
+        """Initialize Finance agent with relevant tables."""
+        # Check which tables actually exist in the database
+        existing_tables = self._get_existing_tables()
+        logger.info(f"Found {len(existing_tables)} existing tables in database")
+        
+        # Define potential tables relevant to Finance and Sales
+        potential_finance_tables = [
+            # Finance-related tables
+            "bills",
+            "bill",
+            "bill_payments",
+            "bill_products",
+            "budget",
+            "budgets",
+            "chart_of_accounts",
+            "chart_of_account_types",
+            "credit_notes",
+            "debit_notes",
+            "expenses",
+            "expense_types",
+            "financial_years",
+            "journal_entries",
+            "journal_items",
+            "payments",
+            "payment_methods",
+            "revenues",
+            "transactions",
+            "taxes"
+        ]
+        
+        # Sales-related tables
+        potential_sales_tables = [
+            "customers",
+            "deals",
+            "invoices", 
+            "invoice_products",
+            "invoice_payments", 
+            "leads",
+            "pipelines",
+            "stages",
+            "sources",
+            "proposals", 
+            "product_services",
+            "commissions",
+            "quotations",
+            "orders",
+            "coupons",
+            "plans",
+            "pos",
+            "pos_products",
+            "contracts",
+            "contract_types",
+            "estimations"
+        ]
+        
+        # Filter to only include tables that actually exist in the database
+        finance_tables = [table for table in potential_finance_tables if table in existing_tables]
+        sales_tables = [table for table in potential_sales_tables if table in existing_tables]
+        
+        # Combined list of tables
+        all_tables = finance_tables + sales_tables
+        
+        # Log the tables being used
+        logger.info(f"Finance agent using these tables that exist in database: {', '.join(all_tables)}")
+        
+        # Initialize base class with Finance-specific settings
+        super().__init__(
+            agent_type="finance",
+            relevant_tables=all_tables,
+            fallback_to_sql=True
         )
-
-        return AgentResponse(
-            message=response_text,
-            conversation_id=conversation_id
-        )
-
-    async def generate_visualization(
-        self,
-        query: str,
-        company_id: int,
-        user_id: str,
-        visualization_type: Optional[str] = None,
-        session: Optional[Session] = None
-    ) -> VisualizationResult:
-        """Generate finance visualization."""
-        context = {
-            "agent_type": "Finance",
-            "user_id": user_id,
-            "visualization_query": query,
-            "visualization_type": visualization_type or "auto",
-        }
-
-        # Fetch data needed for visualization using DatabaseQueries
-        finance_data_for_viz = []
-        explanation_fallback = "Could not generate specific visualization."
+    
+    def _get_existing_tables(self) -> List[str]:
+        """Get a list of tables that actually exist in the database."""
         try:
-            if session:
-                # Example: Fetch expense breakdown for a pie chart
-                finance_data_for_viz = await DatabaseQueries.get_expense_breakdown(company_id, session)
-                context["expense_breakdown"] = finance_data_for_viz
-            else:
-                explanation_fallback = "Database connection not available for visualization data."
-
-        except HTTPException as e:
-            logger.error(f"HTTP error getting finance data for visualization: {e.detail}")
-            explanation_fallback = f"Failed to retrieve visualization data: {e.detail}"
+            engine = DatabaseConnection.create_engine()
+            with engine.connect() as connection:
+                # Get all tables in the database
+                result = connection.execute(text("SHOW TABLES"))
+                existing_tables = [row[0] for row in result]
+                return existing_tables
         except Exception as e:
-            logger.error(f"Unexpected error getting finance data for visualization: {str(e)}")
-            explanation_fallback = "An unexpected error occurred fetching visualization data."
+            logger.error(f"Error checking existing tables: {str(e)}")
+            return []
+    
+    def _generate_system_prompt(self, company_id: int, isolation_instructions: str) -> str:
+        """Generate Finance-specific system prompt.
+        
+        Args:
+            company_id: Company ID
+            isolation_instructions: Isolation instructions based on table columns
+            
+        Returns:
+            System prompt
+        """
+        return f"""You are a friendly, helpful Finance & Sales Assistant working with a company's database.
+You help users query data about finances, sales, revenue, expenses, budgets, etc. in natural, conversational language.
 
-        # Prepare data in a format the LLM might understand for JSON generation
-        viz_data_summary = {item['category']: item['total_amount'] for item in finance_data_for_viz}
+DATA ISOLATION CRITICAL RULE:
+ALWAYS include WHERE created_by = {company_id} in ALL your queries for ALL tables involved.
+This is required for security, no exceptions.
 
-        system_prompt = self._generate_system_prompt(company_id, context)
-        system_prompt += """
-You are generating a financial visualization based on the provided data summary.
-Your response must be valid JSON following the specified chart structure (bar, line, pie, etc.).
-Respond ONLY with valid JSON.
-Example JSON Structure:
-{
-  "chart_type": "pie",
-  "labels": ["Category A", "Category B"],
-  "datasets": [{"label": "Dataset Label", "data": [value1, value2], "backgroundColor": ["color1", "color2"] }],
-  "title": "Chart Title",
-  "description": "Chart Description",
-  "explanation": "Text explanation of the insights."
-}
+{isolation_instructions}
+
+FINANCE DATABASE KNOWLEDGE:
+- expenses: Contains expense records with fields like date, amount, category, description, etc.
+- revenues: Contains revenue records with fields like date, amount, source, description, etc.
+- budget: Contains budget records with fields like period, category, amount, etc.
+- chart_of_accounts: Contains account classifications with fields like name, code, type, etc.
+- chart_of_account_types: Contains account types with fields like name, etc.
+- bill: Contains vendor bills with fields like vendor_id, date, status, etc.
+- payments: Contains payment records with fields like date, amount, method, etc.
+- journal_entries: Contains accounting entries with fields like date, reference, description, etc.
+- journal_items: Contains journal entry line items with fields like journal_id, account_id, debit, credit, etc.
+
+SALES DATABASE KNOWLEDGE:
+- customers: Contains customer information with fields like name, email, phone, company, etc.
+- deals: Sales opportunities with fields like name, customer_id, amount, status, etc.
+- invoices: Customer invoices with fields like customer_id, amount, date, status, etc.
+- invoice_products: Line items on invoices with fields like invoice_id, product_id, quantity, price, etc.
+- invoice_payments: Payments against invoices with fields like invoice_id, amount, date, etc.
+- leads: Prospective customers with fields like name, email, phone, source, status, etc.
+- product_services: Products and services with fields like name, price, description, etc.
+
+JOIN RELATIONSHIPS (FINANCE):
+- bill.vendor_id connects to venders.id
+- bill_products.bill_id connects to bill.id
+- bill_products.product_id connects to product_services.id
+- journal_items.journal_id connects to journal_entries.id
+- journal_items.account_id connects to chart_of_accounts.id
+- chart_of_accounts.type connects to chart_of_account_types.id
+
+JOIN RELATIONSHIPS (SALES):
+- deals.customer_id connects to customers.id
+- deals.stage_id connects to stages.id
+- stages.pipeline_id connects to pipelines.id
+- leads.stage_id connects to lead_stages.id
+- invoices.customer_id connects to customers.id
+- invoice_products.invoice_id connects to invoices.id
+- invoice_products.product_id connects to product_services.id
+- invoice_payments.invoice_id connects to invoices.id
+
+ID RESOLUTION - ALWAYS FOLLOW THIS RULE:
+When your query returns IDs (like customer_id, vendor_id, product_id, etc.), ALWAYS perform additional queries to resolve these IDs into human-readable names.
+Example:
+1. If your first query returns a customer_id = 5, run a second query: "SELECT name FROM customers WHERE id = 5 AND created_by = {company_id}"
+2. Then replace "customer_id: 5" with "Customer: [actual customer name]" in your response
+3. Do this for ALL foreign key IDs in your results to make the information user-friendly
+4. For status codes, convert them to descriptive text (e.g., "Status: 1" becomes "Status: Active" if you know the mapping)
+
+FINANCE AND SALES METRICS KNOWLEDGE:
+- Revenue Growth: Percentage change in revenue over time periods
+- Profit Margin: Net profit divided by revenue * 100
+- Cash Flow: Net cash movement over a time period
+- Operating Expenses: Total expenses related to core business operations
+- Budget Variance: Difference between budgeted and actual amounts
+- Total Revenue: Sum of invoice amounts
+- Average Deal Size: Average value of closed deals
+- Conversion Rate: Percentage of leads converted to customers
+- Win Rate: Percentage of deals closed won vs. total closed deals
+- Revenue by Product: Revenue breakdown by product/service
+
+IMPORTANT GUIDELINES:
+1. NEVER make up information. Only return data that actually exists in the database.
+2. If you don't find relevant data, clearly say so rather than making up a response.
+3. Present your answers in a clear, concise way for business users.
+4. NEVER reveal SQL queries to the end user - only show the information they asked for.
+5. Format your responses in a readable way, with proper capitalization and punctuation.
+6. When appropriate, format financial data in tables for clarity.
+7. Always include currency symbols ($ by default) for monetary values.
+8. For financial reports or trends, consider if a visualization might help the user understand the data better.
+9. ALWAYS RESOLVE IDs to actual names when presenting data. For example, show customer names instead of customer_ids.
+
+USE DATABASE TOOLS ALWAYS:
+- When asked about finances, sales, customers, invoices, etc., ALWAYS search the database for real data.
+- Never fabricate information or say "I would need to search the database" - actually search it.
+- Use SQL queries to get actual data for every information request.
+- If data doesn't exist, clearly state that no matching records were found.
+
+Today's date is {self._get_current_date()}
 """
 
-        user_prompt = f"Generate a visualization for: {query}\n"
-        if visualization_type:
-            user_prompt += f"Preferred type: {visualization_type}\n"
-        user_prompt += f"Based on available financial data. Data Summary: {json.dumps(viz_data_summary)}"
-
-        response_text = await self._get_llm_response(user_prompt, system_prompt)
-
-        try:
-            response_json = json.loads(response_text)
-            explanation = response_json.pop("explanation", "No explanation provided.")
-            return VisualizationResult(
-                data=response_json,
-                explanation=explanation
-            )
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parsing finance visualization JSON: {str(e)}")
-            # Fallback visualization using the fetched data if parsing fails
-            fallback_data = {
-                "chart_type": visualization_type or "pie", # Default to pie if not specified
-                "labels": list(viz_data_summary.keys()),
-                "datasets": [{
-                    "label": "Expenses",
-                    "data": list(viz_data_summary.values()),
-                    # Generate some default colors if needed
-                    "backgroundColor": [f'hsl({(i*60)%360}, 70%, 80%)' for i in range(len(viz_data_summary))] 
-                }],
-                "title": "Expense Breakdown",
-                "description": "Distribution of expenses across categories."
-            }
-            return VisualizationResult(
-                data=fallback_data,
-                explanation=f"{explanation_fallback} Showing available expense breakdown."
-            )
-
-    async def perform_action(
-        self,
-        action: str,
-        parameters: Dict[str, Any],
-        company_id: int,
-        user_id: str,
-        session: Optional[Session] = None
-    ) -> ActionResult:
-        """Perform finance action."""
-        supported_actions = {
-            "add_expense": self._add_expense,
-            "add_revenue": self._add_revenue,
-            # Add more finance actions here
-        }
-
-        if action not in supported_actions:
-            return ActionResult(
-                success=False,
-                message=f"Unsupported finance action: {action}",
-                data={"supported_actions": list(supported_actions.keys())}
-            )
-
-        if not session:
-            return ActionResult(success=False, message="Database session is required for actions")
-
-        try:
-            # Convert user_id from string (from token potentially) to int for DB
-            user_id_int = int(user_id) 
-            result = await supported_actions[action](
-                parameters=parameters,
-                company_id=company_id,
-                user_id=user_id_int, # Pass integer user_id
-                session=session
-            )
-            return result
-        except ValueError:
-             logger.error(f"Invalid user_id format for action {action}: {user_id}")
-             return ActionResult(success=False, message="Invalid user ID format.")
-        except HTTPException as he:
-            # Handle errors raised from DatabaseQueries (e.g., 403 Forbidden, 500)
-            logger.error(f"HTTP error during finance action {action}: {he.detail} (Status: {he.status_code})")
-            return ActionResult(success=False, message=f"Action failed: {he.detail}")
-        except Exception as e:
-            logger.error(f"Unexpected error performing finance action {action}: {str(e)}")
-            return ActionResult(success=False, message=f"Error performing action: {str(e)}")
-
-    async def _add_expense(
-        self,
-        parameters: Dict[str, Any],
-        company_id: int,
-        user_id: int, # Expecting integer user_id
-        session: Session
-    ) -> ActionResult:
-        """Adds an expense record using DatabaseQueries."""
-        # Parameters expected by DatabaseQueries.insert_expense:
-        # category (maps to name), date, amount, description?, attachment?, project_id?, task_id?
-        required_params = ["category", "amount", "date"] 
-        missing_params = [p for p in required_params if p not in parameters or parameters[p] is None]
-        if missing_params:
-            return ActionResult(
-                success=False,
-                message=f"Missing required parameters for adding expense: {', '.join(missing_params)}",
-                data={"required_parameters": required_params}
-            )
+    def _clean_technical_references(self, text: str) -> str:
+        """Clean technical references from response text."""
+        # List of phrases that indicate technical language we want to remove
+        technical_phrases = [
+            "I would need to query",
+            "After querying",
+            "I can query",
+            "I need to access",
+            "in the database",
+            "from the database",
+            "database query",
+            "SQL query",
+            "to calculate",
+            "I would need to check",
+            "I would have to look",
+            "I'll check",
+            "I need to search",
+            "will require accessing",
+            "I'll need to query",
+            "I would need to access",
+            "I will need to retrieve",
+            "revenues table",
+            "expenses table",
+            "transactions table",
+            "bills table",
+            "invoices table",
+            "chart_of_accounts table"
+        ]
         
-        try:
-            expense_id = await DatabaseQueries.insert_expense(
-                company_id=company_id,
-                user_id=user_id,
-                parameters=parameters,
-                session=session
-            )
-            if expense_id:
-                 return ActionResult(
-                    success=True,
-                    message=f"Expense of {parameters.get('amount')} in category '{parameters.get('category')}' added successfully.",
-                    data={"expense_id": expense_id, "details": parameters}
-                )
-            else:
-                 # Should not happen if insert_expense raises on failure, but handle just in case
-                 return ActionResult(success=False, message="Failed to add expense record.")
-        except HTTPException as he:
-            # Re-raise for the main perform_action handler
-             raise he
-        except Exception as e:
-            # Catch unexpected errors from DB layer if not handled as HTTPException
-            logger.error(f"Unexpected error in _add_expense calling insert_expense: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Internal error adding expense: {str(e)}")
-
-
-    async def _add_revenue(
-        self,
-        parameters: Dict[str, Any],
-        company_id: int,
-        user_id: int, # Expecting integer user_id
-        session: Session
-    ) -> ActionResult:
-        """Adds a revenue record using DatabaseQueries."""
-        # Parameters expected by DatabaseQueries.insert_revenue:
-        # date, amount, account_id, customer_id, category_id, payment_method, reference?, description/source?, add_receipt?
-        required_params = ["source", "amount", "date", "account_id", "customer_id", "category_id", "payment_method"]
-        # Map 'source' to 'description' if 'description' isn't provided
-        if 'description' not in parameters and 'source' in parameters:
-            parameters['description'] = parameters['source']
-            
-        missing_params = [p for p in required_params if p not in parameters or parameters[p] is None]
-        if missing_params:
-            return ActionResult(
-                success=False,
-                message=f"Missing required parameters for adding revenue: {', '.join(missing_params)}",
-                data={"required_parameters": [p for p in required_params if p != 'description']} # Show original requirements
-            )
-            
-        try:
-            revenue_id = await DatabaseQueries.insert_revenue(
-                 company_id=company_id,
-                 user_id=user_id,
-                 parameters=parameters,
-                 session=session
-             )
-            if revenue_id:
-                 return ActionResult(
-                    success=True,
-                    message=f"Revenue of {parameters.get('amount')} from source '{parameters.get('source', 'N/A')}' added successfully.",
-                    data={"revenue_id": revenue_id, "details": parameters}
-                )
-            else:
-                 # Should not happen if insert_revenue raises on failure
-                 return ActionResult(success=False, message="Failed to add revenue record.")
-        except HTTPException as he:
-             # Re-raise for the main perform_action handler
-             raise he
-        except Exception as e:
-             # Catch unexpected errors from DB layer
-             logger.error(f"Unexpected error in _add_revenue calling insert_revenue: {str(e)}")
-             raise HTTPException(status_code=500, detail=f"Internal error adding revenue: {str(e)}")
-
-
-    def _build_user_prompt_with_history(self, message: str, history: List[Dict]) -> str:
-        """Builds the user prompt including conversation history."""
-        if not history:
-            return message
-
-        prompt = "Conversation history:\n"
-        for entry in history:
-            prompt += f"User: {entry['message']}\nAssistant: {entry['response']}\n\n"
-        prompt += f"New message: {message}"
-        return prompt 
+        # Remove sentences containing these phrases
+        for phrase in technical_phrases:
+            # Find all sentences containing the phrase - using case-insensitive matching
+            pattern = r'(?i)[^.!?]*' + re.escape(phrase) + r'[^.!?]*[.!?]'
+            text = re.sub(pattern, '', text)
+        
+        # Clean up double spaces and extra periods
+        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r'\.+', '.', text)
+        text = re.sub(r'\s+\.', '.', text)
+        text = re.sub(r'\.\s+\.', '.', text)
+        
+        # If the text starts with conjunctions like "Based on" or "According to", remove them
+        text = re.sub(r'(?i)^(Based on|According to|From|As per).*?,\s*', '', text)
+        
+        # If after all this cleaning we've lost content, generate a generic response
+        if len(text.strip()) < 20:
+            text = "I don't have enough information to provide specific financial data at this time."
+        
+        return text.strip() 

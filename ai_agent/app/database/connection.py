@@ -31,7 +31,7 @@ db_session = scoped_session(SessionLocal)
 # Create base class for models
 Base = declarative_base()
 
-def get_db_session():
+def get_session():
     """Get database session.
     
     Yields:

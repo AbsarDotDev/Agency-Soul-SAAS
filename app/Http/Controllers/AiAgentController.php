@@ -12,6 +12,85 @@ use Illuminate\Support\Facades\DB;
 class AIAgentController extends Controller
 {
     /**
+     * Helper function to get/refresh AI Agent API token.
+     * Stores the token in session to avoid re-fetching on every request.
+     */
+    private function getOrRefreshAiAgentToken(User $company, User $user)
+    {
+        $sessionKey = 'ai_agent_token_' . $company->id;
+        $expiryKey = 'ai_agent_token_expiry_' . $company->id;
+
+        $token = session($sessionKey);
+        $expiry = session($expiryKey);
+
+        // Check if token exists and is not (too close to) expired
+        // A more robust solution might involve decoding the JWT if possible on Laravel side to check 'exp'
+        if ($token && $expiry && now()->timestamp < ($expiry - 120)) { // 120 seconds buffer
+            Log::debug('Using cached AI Agent token from session.', ['company_id' => $company->id]);
+            return $token;
+        }
+
+        $agentApiUrl = config('services.ai_agent.url'); // Recommended: move to services config
+        if (!$agentApiUrl) {
+            $agentApiUrl = config('app.ai_agent_url'); // Fallback to old config key
+        }
+
+        if (!$agentApiUrl) {
+            Log::error('AI Agent API URL is not configured (checked services.ai_agent.url and app.ai_agent_url).');
+            return null;
+        }
+
+        Log::info('Attempting to fetch new AI Agent token.', ['company_id' => $company->id, 'user_id' => $user->id]);
+        try {
+            $internalApiKey = config('services.ai_agent.internal_api_key');
+            if (!$internalApiKey) {
+                Log::error('Internal API Key for AI Agent service is not configured in Laravel (services.ai_agent.internal_api_key).');
+                return null;
+            }
+
+            $authResponse = Http::timeout(15)->post($agentApiUrl . '/api/auth', [ 
+                'company_id' => $company->id,
+                'user_id' => (string) $user->id,
+                'api_key' => $internalApiKey, // Send the configured internal API key
+            ]);
+
+            if ($authResponse->successful() && $authResponse->json('access_token')) {
+                $newToken = $authResponse->json('access_token');
+                
+                // Attempt to get expiry from Python settings if possible, otherwise use a default.
+                // The Python's ACCESS_TOKEN_EXPIRE_MINUTES is the source of truth.
+                // For simplicity here, we'll use a configurable value on Laravel side or a default.
+                $tokenLifetimeMinutes = config('services.ai_agent.token_lifetime_minutes', 60 * 24 * 7); // Default 7 days
+
+                session([$sessionKey => $newToken]);
+                session([$expiryKey => now()->addMinutes($tokenLifetimeMinutes)->timestamp]);
+                
+                Log::info('Successfully fetched and cached new AI Agent token.', ['company_id' => $company->id]);
+                return $newToken;
+            } else {
+                Log::error('Failed to fetch AI Agent token from /api/auth.', [
+                    'status' => $authResponse->status(),
+                    'body' => $authResponse->body(),
+                    'company_id' => $company->id,
+                ]);
+                return null;
+            }
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::error('ConnectionException while fetching AI Agent token.', [
+                'error' => $e->getMessage(),
+                'company_id' => $company->id
+            ]);
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Generic Exception while fetching AI Agent token.', [
+                'error' => $e->getMessage(),
+                'company_id' => $company->id
+            ]);
+            return null;
+        }
+    }
+
+    /**
      * Show the AI Agent chat interface.
      *
      * @return \Illuminate\View\View
@@ -106,21 +185,31 @@ class AIAgentController extends Controller
             return response()->json(['error' => 'You have used all your AI Agent tokens. Please contact the administrator to add more tokens.'], 403);
         }
 
-        $agentApiUrl = config('app.ai_agent_url'); // Get URL from config (pulled from .env)
+        $aiAgentToken = $this->getOrRefreshAiAgentToken($company, $user);
+        if (!$aiAgentToken) {
+            Log::error('Failed to obtain AI Agent token for chat.', ['company_id' => $company->id, 'user_id' => $user->id]);
+            return response()->json(['error' => 'Could not authenticate with the AI Agent service. Please try again later.'], 503); // Service Unavailable
+        }
 
+        $agentApiUrl = config('services.ai_agent.url'); // Recommended: move to services config
         if (!$agentApiUrl) {
-            Log::error('AI Agent API URL is not configured.');
+            $agentApiUrl = config('app.ai_agent_url'); // Fallback to old config key
+        }
+        
+        if (!$agentApiUrl) {
+            Log::error('AI Agent API URL is not configured for chat.');
             return response()->json(['error' => 'AI Agent service is not configured correctly.'], 500);
         }
 
         try {
-            $response = Http::timeout(60) // Set a timeout (e.g., 60 seconds)
-                ->post($agentApiUrl . '/api/message', [
+            $response = Http::timeout(120) // Increased timeout for potentially long LLM responses
+                ->withToken($aiAgentToken) // Send the JWT
+                ->post($agentApiUrl . '/api/message', [ // Path confirmed earlier
                     'message' => $validated['message'],
                     'company_id' => $company->id,
-                    'user_id' => (string) $user->id, // Pass the specific user who sent the message
+                    'user_id' => (string) $user->id, 
                     'conversation_id' => $validated['conversation_id'] ?? null,
-                    'agent_type' => 'sql' // Defaulting to SQL agent for now
+                    // 'agent_type' is now determined by the Python dispatcher
                 ]);
 
             if ($response->failed()) {
@@ -158,47 +247,56 @@ class AIAgentController extends Controller
             
             // --- Token Usage Update Logic ---
             $responseData = $response->json();
-            
-            // Attempt to parse the visualization data specifically for debugging
-            if (isset($responseData['visualization'])) {
-                Log::info('Visualization data found in response:', [
-                    'visualization_type' => $responseData['visualization']['chart_type'] ?? 'unknown',
-                    'has_labels' => isset($responseData['visualization']['labels']),
-                    'has_datasets' => isset($responseData['visualization']['datasets']),
-                    'options_type' => is_array($responseData['visualization']['options']) ? 'array' : (is_object($responseData['visualization']['options']) ? 'object' : 'other')
-                ]);
+            Log::info('Parsed AI Agent Response Data:', ['parsed_data' => $responseData]);
+
+            $visualizationData = null;
+            if (isset($responseData['visualization']) && is_array($responseData['visualization'])) {
+                $visualizationData = $responseData['visualization'];
+                if (isset($visualizationData['options']) && (is_array($visualizationData['options']) && empty($visualizationData['options']))) {
+                    $visualizationData['options'] = new \stdClass();
+                }
             } else {
                 Log::warning('No visualization data found in AI Agent response');
             }
             
-            // Log Parsed Response Data for comparison
-            Log::info('Parsed AI Agent Response Data:', ['parsed_data' => $responseData]);
-            
-            // Correctly extract the agent's answer from the 'response' field
-            $aiResponseText = $responseData['response'] ?? 'Error: No response text received from agent.'; 
-            $tokensUsedInRequest = $responseData['tokens_used'] ?? 0; 
-            $conversationId = $responseData['conversation_id'] ?? $validated['conversation_id'];
-            $conversationTitle = $responseData['conversation_title'] ?? null; // Get the title
+            // Python service returns 'token_usage' for the current request.
+            $tokensConsumedInRequest = 0;
+            if (isset($responseData['token_usage'])) {
+                $tokensConsumedInRequest = (int) $responseData['token_usage'];
+            } else {
+                // This log was already present, but we should ensure we handle the case.
+                Log::warning('AI Agent response did not include "token_usage" field. Assuming 0 for this request for local count.', [
+                    'company_id' => $company->id,
+                    'response_body' => $responseData
+                ]);
+            }
 
-            if ($tokensUsedInRequest == 0) {
-                Log::warning('AI Agent response did not include "tokens_used" field.', ['company_id' => $company->id, 'response_body' => $responseData]);
+            // Update the company's total used tokens in Laravel's database
+            // The Python agent itself does not update Laravel's users.ai_agent_tokens_used.
+            // It operates based on the token count passed in its JWT and its own internal logic.
+            if ($tokensConsumedInRequest > 0) {
+                $company->ai_agent_tokens_used += $tokensConsumedInRequest;
+                $company->save();
+                Log::info('Updated company token usage in Laravel DB.', [
+                    'company_id' => $company->id, 
+                    'tokens_added_to_used' => $tokensConsumedInRequest,
+                    'new_total_used' => $company->ai_agent_tokens_used
+                ]);
             }
             
-            // Update token usage in the database
-            $company->ai_agent_tokens_used += $tokensUsedInRequest; // Use the value from response, default to 0
-            $company->save();
+            // The Python service returns 'tokens_remaining' which is the authoritative count after its processing.
+            // Use this value directly for the frontend.
+            $finalTokensRemaining = $responseData['tokens_remaining'] ?? ($tokens_allocated - $company->ai_agent_tokens_used);
 
-            // Recalculate remaining tokens
-            $tokens_remaining = max(0, $tokens_allocated - $company->ai_agent_tokens_used);
-
-            // Return the successful response from the agent
+            // Frontend expects 'text' for the message. Python sends 'message'.
             return response()->json([
-                'response' => $aiResponseText, // Use the correct variable holding the agent's answer
-                'conversation_id' => $conversationId,
-                'conversation_title' => $conversationTitle,
-                'tokens_remaining' => $tokens_remaining,
-                'tokens_used' => $tokensUsedInRequest, // Also return tokens used for this request if needed
-                'visualization' => $responseData['visualization'] ?? null // Include visualization data
+                'text' => $responseData['response'] ?? 'Error: No response text received from agent.', // Map 'response' to 'text'
+                'conversation_id' => $responseData['conversation_id'] ?? null,
+                'visualization' => $visualizationData,
+                'tokens_used_in_request' => $tokensConsumedInRequest, // For frontend to know what this call consumed
+                'tokens_remaining' => $finalTokensRemaining,          // The authoritative remaining tokens after this call
+                'new_title_generated' => $responseData['conversation_title'] ?? null,
+                'agent_type' => $responseData['agent_type'] ?? 'sql'  // Include agent type, default to 'sql' if not provided
             ]);
 
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -242,17 +340,32 @@ class AIAgentController extends Controller
             return response()->json(['error' => 'AI Agent is not enabled for your subscription plan.'], 403);
         }
 
-        $agentApiUrl = config('app.ai_agent_url');
+        // Get token for AI Agent service
+        $aiAgentToken = $this->getOrRefreshAiAgentToken($company, $user);
+        if (!$aiAgentToken) {
+            Log::warning('Failed to obtain AI Agent token for getConversationHistory, falling back to DB.', ['company_id' => $company->id, 'user_id' => $user->id]);
+            // Fall back to database if token cannot be obtained for agent service
+            return $this->getConversationHistoryFromDatabase($id, $company->id);
+        }
+
+        $agentApiUrl = config('services.ai_agent.url');
         if (!$agentApiUrl) {
-            Log::error('AI Agent API URL is not configured for history retrieval.');
-            return response()->json(['error' => 'AI Agent service is not configured correctly.'], 500);
+            $agentApiUrl = config('app.ai_agent_url');
+        }
+
+        if (!$agentApiUrl) {
+            Log::error('AI Agent API URL is not configured for history retrieval, falling back to DB.');
+            return $this->getConversationHistoryFromDatabase($id, $company->id);
         }
 
         try {
             // Try fetching from agent service first
-            $response = Http::timeout(30) // Shorter timeout for history retrieval
-                ->get($agentApiUrl . '/api/conversation/' . $id, [
-                    'company_id' => $company->id // Pass company ID for validation/scoping in the agent service
+            // The Python service's /api/conversation/{id} endpoint might need to be created or adjusted.
+            // For now, assuming it exists and is protected.
+            $response = Http::timeout(30) 
+                ->withToken($aiAgentToken) // Send the JWT
+                ->get($agentApiUrl . '/api/conversation/' . $id, [ // Assuming this is the correct endpoint
+                    // 'company_id' => $company->id, // company_id is in the token, not needed in query params for GET
                 ]);
 
             if ($response->failed()) {

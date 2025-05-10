@@ -55,3 +55,91 @@
 - [ ] Update plan activation logic in payment controllers.
 - [ ] Add route middleware for AI chat page access.
 - [ ] Create basic `ai_agent/chat.blade.php` view.
+
+## Tasks
+
+### Core Infrastructure
+
+- [x] Set up initial FastAPI structure
+- [x] Add database connection handling
+- [x] Implement token validation and authentication
+- [x] Create token usage tracking mechanisms
+- [x] Implement conversation history storage
+- [x] Implement LLM conversation title generation
+- [x] Add LLM safety settings and fallbacks
+- [x] Setup proper error handling across application
+- [x] Optimize LLM initialization to reduce latency
+- [x] Implement LangGraph-based multi-agent architecture
+- [x] Enable LLM instance caching/reuse across requests
+
+### Agent Development
+
+- [x] Create BaseAgent abstract class
+- [x] Implement SQL Agent with company data isolation
+- [ ] Complete HRM Agent development
+  - [ ] Create dedicated schemas for employee-related tables
+  - [ ] Implement employee information retrieval
+  - [ ] Add leave management capabilities
+  - [ ] Add payroll query handling
+  - [ ] Integrate SQL toolkit within HRM agent
+- [ ] Complete Finance Agent development
+  - [ ] Create dedicated schemas for financial tables
+  - [ ] Implement transaction analysis
+  - [ ] Add budget/expense reporting
+  - [ ] Integrate SQL toolkit within Finance agent
+- [ ] Complete CRM Agent development
+  - [ ] Create dedicated schemas for customer-related tables
+  - [ ] Implement customer data retrieval
+  - [ ] Add support ticket capabilities
+  - [ ] Integrate SQL toolkit within CRM agent
+- [ ] Complete Sales Agent development
+  - [ ] Create dedicated schemas for sales-related tables
+  - [ ] Implement leads and deals analysis
+  - [ ] Add pipeline visualization capabilities
+  - [ ] Integrate SQL toolkit within Sales agent
+
+### Visualization
+
+- [x] Implement basic Chart.js visualization generation
+- [ ] Add customization options for visualization types
+- [ ] Create summarization for visualization data
+- [ ] Enable exporting visualizations
+
+### Action Capabilities
+
+- [ ] Implement HRM actions (add/update employees, departments)
+- [ ] Implement Finance actions (record transactions, update budgets)
+- [ ] Implement CRM actions (add/update customer records, tickets)
+- [ ] Implement Sales actions (add/update leads, deals)
+
+### Testing & Deployment
+
+- [x] Set up CI pipeline basics
+- [x] Add FastAPI health check endpoints
+- [ ] Implement comprehensive unit tests
+- [ ] Add integration tests for agent interactions
+- [ ] Document API endpoints for frontend integration
+- [ ] Optimize Docker container for production
+- [ ] Set up monitoring for token usage and performance
+
+### Documentation
+
+- [x] Create basic README with setup instructions
+- [x] Document architecture in PLANNING.md
+- [ ] Add API documentation for all endpoints
+- [ ] Create user guide for agent capabilities
+- [ ] Document database schema relationships
+- [ ] Add developer guides for extending agents
+
+## Completed Tasks (Latest First)
+
+- **2023-07-15**: Fixed router node to use consistent state-based conditional routing
+- **2023-07-15**: Fixed LangGraph node return values and conditional edge routing
+- **2023-07-15**: Fixed async/sync function mismatch in LangGraph dispatcher
+- **2023-07-15**: Fixed LangGraph import issues with conda environment and improved deployment process
+- **2023-07-14**: Implemented LangGraph-based multi-agent architecture with specialized agents and fallback mechanisms
+- **2023-07-12**: Fixed LLM initialization issues and enhanced error handling
+- **2023-07-10**: Added conversation title generation and history retrieval
+- **2023-07-08**: Implemented SQLAgent with company data isolation
+- **2023-07-05**: Set up token tracking and validation
+- **2023-07-01**: Created initial FastAPI application structure

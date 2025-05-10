@@ -40,7 +40,9 @@ async def generate_visualization_from_data(
         return VisualizationResult(
             data=None,
             explanation="No data available for visualization.",
-            tokens_used=0
+            tokens_used=0,
+            chart_type="error",
+            query=query
         )
     
     try:
@@ -63,7 +65,9 @@ async def generate_visualization_from_data(
             return VisualizationResult(
                 data=None,
                 explanation="No data available for visualization.",
-                tokens_used=0
+                tokens_used=0,
+                chart_type="error",
+                query=query
             )
         
         # Try LLM-based visualization generation first
@@ -209,17 +213,19 @@ Return ONLY the valid JSON object. Do not include explanations or any text outsi
             return VisualizationResult(
                 data=chart_data,
                 explanation=explanation,
-                tokens_used=tokens_used
+                tokens_used=tokens_used,
+                chart_type=chart_data.get("chart_type", "error"),
+                query=query
             )
         else:
             logger.error("Failed to obtain valid chart JSON from LLM response after parsing attempts.")
             # Return tokens used even on failure, but no chart data
-            return VisualizationResult(data=None, explanation="Could not generate visualization details.", tokens_used=tokens_used)
+            return VisualizationResult(data=None, explanation="Could not generate visualization details.", tokens_used=tokens_used, chart_type="error", query=query)
 
     except Exception as e:
         logger.error(f"Exception during LLM visualization invoke/parsing: {str(e)}", exc_info=True)
         # Return fixed token count even on error
-        return VisualizationResult(data=None, explanation=f"Error generating visualization details: {str(e)}", tokens_used=tokens_used)
+        return VisualizationResult(data=None, explanation=f"Error generating visualization details: {str(e)}", tokens_used=tokens_used, chart_type="error", query=query)
 
 def _generate_visualization_directly(
     df: pd.DataFrame,
@@ -379,7 +385,9 @@ def _generate_bar_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
     return VisualizationResult(
         data=chart_data,
         explanation=explanation,
-        tokens_used=0
+        tokens_used=0,
+        chart_type="bar",
+        query=query
     )
 
 def _generate_line_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
@@ -487,7 +495,9 @@ def _generate_line_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
     return VisualizationResult(
         data=chart_data,
         explanation=explanation,
-        tokens_used=0
+        tokens_used=0,
+        chart_type="line",
+        query=query
     )
 
 def _generate_pie_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
@@ -568,7 +578,9 @@ def _generate_pie_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
     return VisualizationResult(
         data=chart_data,
         explanation=explanation,
-        tokens_used=0
+        tokens_used=0,
+        chart_type="pie",
+        query=query
     )
 
 def _generate_scatter_chart(df: pd.DataFrame, query: str) -> VisualizationResult:
@@ -647,7 +659,9 @@ def _generate_scatter_chart(df: pd.DataFrame, query: str) -> VisualizationResult
     return VisualizationResult(
         data=chart_data,
         explanation=explanation,
-        tokens_used=0
+        tokens_used=0,
+        chart_type="scatter",
+        query=query
     )
 
 def _create_fallback_visualization(
@@ -692,7 +706,9 @@ def _create_fallback_visualization(
                     ]
                 },
                 explanation=f"This is a basic {chart_type} chart showing {keys[1]} for each {keys[0]}. This is a fallback visualization as the custom generation failed.",
-                tokens_used=0
+                tokens_used=0,
+                chart_type=chart_type,
+                query=query
             )
     
     # For dictionaries or empty lists, create minimal visualization
@@ -712,7 +728,9 @@ def _create_fallback_visualization(
             ]
         },
         explanation="Could not generate a detailed visualization for this data. The data structure may not be suitable for the requested visualization type.",
-        tokens_used=0
+        tokens_used=0,
+        chart_type=chart_type,
+        query=query
     )
 
 def _create_emergency_fallback_visualization(
@@ -746,7 +764,9 @@ def _create_emergency_fallback_visualization(
             ]
         },
         explanation="I encountered an error while generating a visualization for your data. This is a placeholder chart. You may want to try a different query or visualization type.",
-        tokens_used=0
+        tokens_used=0,
+        chart_type=chart_type,
+        query=query
     )
 
 def _convert_to_number(value) -> float:
