@@ -114,7 +114,19 @@ async def _generate_visualization_with_llm(
     Returns:
         VisualizationResult including tokens used by this LLM call.
     """
-    data_json = df.head(20).to_json(orient='records')
+    # Convert datetime columns to string to avoid timestamp conversion issues
+    df_for_json = df.copy()
+    for col in df_for_json.select_dtypes(include=['datetime64', 'datetime64[ns]', 'datetime64[D]']).columns:
+        df_for_json[col] = df_for_json[col].dt.strftime('%Y-%m-%d')
+    
+    # For date columns (not datetime)
+    for col in df_for_json.select_dtypes(include=['object']).columns:
+        # Check if column contains date-like objects
+        from datetime import date
+        if df_for_json[col].iloc[0].__class__ == date:
+            df_for_json[col] = df_for_json[col].astype(str)
+    
+    data_json = df_for_json.head(20).to_json(orient='records')
     
     # Simplified prompt focusing *only* on the JSON output structure
     system_prompt = f"""
@@ -142,8 +154,11 @@ Adhere STRICTLY to this JSON structure:
   }}
 }}
 
-IMPORTANT: The "options" field must ALWAYS be an OBJECT ({{ }}), NEVER an array ([ ]). 
-For pie charts, you can use empty options: "options": {{ }} but never "options": []
+IMPORTANT: 
+1. The "options" field must ALWAYS be an OBJECT ({{ }}), NEVER an array ([ ]). 
+2. For pie charts, you can use empty options: "options": {{ }} but never "options": []
+3. IMPORTANT: When working with dates, keep them as readable strings (YYYY-MM-DD) in labels. 
+   Never convert dates to timestamps in milliseconds.
 
 OUTPUT:
 Return ONLY the valid JSON object. Do not include explanations or any text outside the JSON structure.

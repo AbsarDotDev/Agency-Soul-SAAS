@@ -20,6 +20,7 @@ from app.agents.product_service_agent import ProductServiceAgent
 from app.core.config import settings
 from app.core.llm import get_llm
 from app.agents.visualization_agent import VisualizationAgent
+import traceback
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -38,84 +39,232 @@ class AgentDispatcher:
         message: str, 
         company_id: int, 
         user_id: str,
-        original_conversation_id: Optional[str] = None, # Renamed to avoid confusion
+        original_conversation_id: Optional[str] = None, 
         session: Optional[Session] = None
     ) -> AgentResponse:
         """Process message and route to appropriate agent."""
         
-        # Determine the conversation_id to be used throughout this processing
         current_conversation_id = original_conversation_id or str(uuid.uuid4())
-        is_new_conversation_internally = original_conversation_id is None
+        logger.info(f"[DISPATCHER] Start. InConvID: {original_conversation_id}, UseConvID: {current_conversation_id}, Msg: '{message[:60]}...'")
+        message_lower = message.lower()
         
-        logger.info(f"[DISPATCHER] Starting process_message. Input ConvID: {original_conversation_id}, Using ConvID: {current_conversation_id}")
+        # Log the exact message being checked in lowercase for debugging
+        logger.info(f"[DISPATCHER] Checking message_lower: '{message_lower}'")
 
         try:
-            message_lower = message.lower()
-            viz_keywords = [
-                "visualize", "visualization", "chart", "graph", "plot", "pie chart", 
-                "bar chart", "line graph", "show me a chart", "make a graph",
-                "create chart", "generate chart", "draw chart", "display chart",
-                "employees per department", "department breakdown"
+            # --- Enhanced Strong Visualization Check --- 
+            is_strong_viz_request = False
+            
+            # Strong visualization keywords (direct matches)
+            viz_keywords_strong = [
+                "visualize", "visualise", "visualization", "visualisation", "chart", "graph", "plot", "histogram", "diagram",
+                "pie chart", "bar chart", "line graph", "scatter plot", "gantt chart",
+                "create chart", "generate chart", "draw chart", "display chart", "show me a chart",
+                "make a graph", "make a chart", "plot the data", "chart the results",
+                "create histogram", "generate histogram", "draw histogram", "show histogram",
+                "trend of", "distribution of", "breakdown of", "comparison of", "correlation between"
             ]
             
-            is_visualization_request_by_keyword = any(keyword in message_lower for keyword in viz_keywords)
+            # Check for direct strong keyword matches first
+            strong_matches = [kw for kw in viz_keywords_strong if kw in message_lower]
+            if strong_matches:
+                is_strong_viz_request = True
+                logger.info(f"[DISPATCHER] Strong viz keyword direct match: {strong_matches}")
             
-            if is_visualization_request_by_keyword:
-                logger.info(f"[DISPATCHER-VIZ-PATH] Entered for message: '{message[:50]}...' (Using ConvID: {current_conversation_id})")
+            # If no strong matches, try the enhanced detection logic
+            if not is_strong_viz_request:
+                # Soft keywords that might indicate visualization intent
+                viz_keywords_soft = [
+                    "show me data for", "analyze sales for", "employees per",
+                    "showing the", "with respect to", "based on", "display the", "overview of", 
+                    "show", "display", "illustrate"
+                ]
+                
+                # Data indicators - things that could be visualized
+                data_indicators = [
+                    "products", "employees", "customers", "sales", "revenue", "expenses", 
+                    "departments", "tasks", "stock", "quantity", "levels", "distribution",
+                    "counts", "totals", "status", "progress"
+                ]
+                
+                # Chart terms - explicit mention of visualization type
+                chart_terms = [
+                    "chart", "graph", "plot", "histogram", "visualisation", "visualization", 
+                    "diagram", "bar graph", "pie chart", "line graph", "bar", "pie"
+                ]
+
+                # Check for different combinations of keywords
+                has_soft_keyword = any(keyword in message_lower for keyword in viz_keywords_soft)
+                has_data_indicator = any(indicator in message_lower for indicator in data_indicators)
+                has_chart_term = any(term in message_lower for term in chart_terms)
+                
+                # Log what matched for debugging
+                if has_soft_keyword or has_data_indicator or has_chart_term:
+                    logger.info(f"[DISPATCHER] Soft viz matches - Keywords: {[kw for kw in viz_keywords_soft if kw in message_lower]}, " +
+                              f"Data indicators: {[di for di in data_indicators if di in message_lower]}, " +
+                              f"Chart terms: {[ct for ct in chart_terms if ct in message_lower]}")
+                
+                # Different patterns that indicate visualization intent
+                if has_soft_keyword and has_data_indicator and has_chart_term:
+                    is_strong_viz_request = True
+                    logger.info("[DISPATCHER] Detected viz intent: soft keyword + data indicator + chart term")
+                elif has_data_indicator and has_chart_term:
+                    is_strong_viz_request = True
+                    logger.info("[DISPATCHER] Detected viz intent: data indicator + chart term")
+                elif "visuali" in message_lower and has_data_indicator:  
+                    # Catches variants like "visualize", "visualise", "visualization" with data
+                    is_strong_viz_request = True
+                    logger.info("[DISPATCHER] Detected viz intent: visuali* + data indicator")
+                elif (len(message_lower.split()) < 10 and 
+                      (("by" in message_lower or "of" in message_lower) and has_data_indicator and has_chart_term)):
+                    # Short queries with relationship terms + data + chart term
+                    is_strong_viz_request = True
+                    logger.info("[DISPATCHER] Detected viz intent: short query with relationship + data + chart")
+                    
+                # Product-specific viz detection (important special case)
+                elif ("product" in message_lower or "stock" in message_lower) and ("quantity" in message_lower or "available" in message_lower):
+                    is_strong_viz_request = True
+                    logger.info("[DISPATCHER] Detected product-specific viz intent")
+
+            # --- Path Decision based on Strong Viz Check --- 
+            if is_strong_viz_request:
+                logger.info(f"[DISPATCHER-VIZ-BY-KEYWORD-PATH] Strong viz intent detected. Routing to SQLAgent.generate_visualization.")
                 sql_agent_for_viz = self._get_agent("sql")
                 
-                # Call generate_visualization directly
-                # SQLAgent.generate_visualization will handle its own new conversation_id logic if current_conversation_id is None (it shouldn't be here)
                 response_from_agent = await sql_agent_for_viz.generate_visualization(
                     query=message, company_id=company_id, user_id=user_id,
-                    visualization_type=None, session=session, conversation_id=current_conversation_id
+                    visualization_type=None, # SQLAgent will infer type if possible
+                    session=session, conversation_id=current_conversation_id
                 )
-                logger.info(f"[DISPATCHER-VIZ-PATH] Returned from SQLAgent.generate_visualization with ConvID: {response_from_agent.conversation_id}")
-                # Ensure the agent_type is set correctly for the viz path
-                response_from_agent.agent_type = "visualization"
-                logger.info(f"[DISPATCHER-VIZ-PATH] Final response: {response_from_agent.dict(exclude_none=True)}")
+                
+                # Ensure agent_type is set correctly for direct visualization calls
+                if response_from_agent.visualization and response_from_agent.agent_type != "visualization":
+                     response_from_agent.agent_type = "visualization"
+                     logger.info(f"[DISPATCHER-VIZ-BY-KEYWORD-PATH] Set agent_type to 'visualization' for visualization response")
+                elif not response_from_agent.visualization and response_from_agent.agent_type == "sql":
+                     # If SQL agent somehow failed to produce viz but was called for it.
+                     logger.warning(f"[DISPATCHER-VIZ-BY-KEYWORD-PATH] SQLAgent called for viz but returned no viz data.")
+
+                logger.info(f"[DISPATCHER-VIZ-BY-KEYWORD-PATH] Final response: {response_from_agent.dict(exclude_none=True)}")
                 return response_from_agent
             
-            # --- Normal Path --- 
-            logger.info(f"[DISPATCHER-NORMAL-PATH] Entered for message: '{message[:50]}...' (Using ConvID: {current_conversation_id})")
-            agent_to_use_type = "sql" 
-            if self._is_direct_sql_query(message):
-                logger.info("[DISPATCHER-NORMAL-PATH] Detected direct SQL query.")
-            else:
-                logger.info("[DISPATCHER-NORMAL-PATH] Detecting agent type...")
+            # --- Normal Path (no strong viz keywords detected by dispatcher, proceed to LLM classification) --- 
+            logger.info(f"[DISPATCHER-NORMAL-PATH] No strong viz keywords determined by initial checks. Proceeding to LLM classification. (UseConvID: {current_conversation_id}) Msg: '{message[:60]}...'")
+            agent_to_use_type = "sql" # Default unless LLM classification changes it
+            
+            # Only use LLM-based agent detection if it's NOT a direct SQL query
+            if not self._is_direct_sql_query(message):
+                logger.info("[DISPATCHER-NORMAL-PATH] Not direct SQL, detecting agent type via LLM...")
                 agent_to_use_type = await self._detect_agent_type(message, company_id, session)
+            else:
+                logger.info("[DISPATCHER-NORMAL-PATH] Is direct SQL query, will use SQLAgent.")
             
             actual_agent = self._get_agent(agent_to_use_type)
             logger.info(f"[DISPATCHER-NORMAL-PATH] Using agent: {type(actual_agent).__name__} (type: {agent_to_use_type})")
             
-            # Pass the consistently used current_conversation_id
             response_from_agent = await actual_agent.process_message(
                 message=message, company_id=company_id, user_id=user_id,
                 conversation_id=current_conversation_id, session=session
             )
-            logger.info(f"[DISPATCHER-NORMAL-PATH] Returned from {type(actual_agent).__name__}.process_message with ConvID: {response_from_agent.conversation_id}")
+            logger.info(f"[DISPATCHER-NORMAL-PATH] Response from {type(actual_agent).__name__}.process_message (ConvID {response_from_agent.conversation_id}): {response_from_agent.dict(exclude_none=True)}")
 
-            # Ensure agent_type is correctly set based on this path or if viz data is present
-            if not response_from_agent.agent_type:
-                response_from_agent.agent_type = agent_to_use_type
+            # Ensure agent_type is correctly set or corrected
+            # If SQLAgent.process_message decided it IS a visualization, its agent_type will be set.
             if response_from_agent.visualization and response_from_agent.agent_type != "visualization":
+                logger.warning(f"[DISPATCHER-NORMAL-PATH] Viz data found. Correcting agent_type from '{response_from_agent.agent_type}' to 'visualization'.")
                 response_from_agent.agent_type = "visualization"
+            elif not response_from_agent.agent_type: # Fallback if agent_type is still None
+                response_from_agent.agent_type = agent_to_use_type
+                logger.info(f"[DISPATCHER-NORMAL-PATH] Set agent_type to '{agent_to_use_type}' on response.")
                 
-            logger.info(f"[DISPATCHER-NORMAL-PATH] Final response: {response_from_agent.dict(exclude_none=True)}")
+            # If it was routed to a non-SQL agent but the user *also* seemed to want a chart for the general query:
+            # This is a basic attempt to add a chart if a non-SQL agent didn't provide one.
+            if agent_to_use_type != "sql" and not response_from_agent.visualization and any(soft_kw in message_lower for soft_kw in ["show me a chart of", "graph the results for"]):
+                logger.info(f"[DISPATCHER-NORMAL-PATH] Agent '{agent_to_use_type}' provided no viz. Attempting supplemental viz with SQLAgent for: '{message[:60]}...'")
+                try:
+                    sql_agent_for_supplemental_viz = self._get_agent("sql")
+                    supplemental_viz_response = await sql_agent_for_supplemental_viz.generate_visualization(
+                        query=message, # Use original message for viz query
+                        company_id=company_id, user_id=user_id, visualization_type=None,
+                        session=session, conversation_id=current_conversation_id
+                    )
+                    if supplemental_viz_response and supplemental_viz_response.visualization:
+                        logger.info(f"[DISPATCHER-NORMAL-PATH] Supplemental viz generated. Merging with primary response.")
+                        response_from_agent.visualization = supplemental_viz_response.visualization
+                        # The textual response from supplemental_viz_response.response is likely a summary of the chart data.
+                        # We could prepend it or just rely on the primary agent's text.
+                        # For now, let primary agent's text stand, just add the chart.
+                        if response_from_agent.agent_type != "visualization": # Ensure agent type reflects viz presence
+                           response_from_agent.agent_type = "visualization"
+                    else:
+                        logger.info("[DISPATCHER-NORMAL-PATH] Supplemental viz attempt did not yield data.")
+                except Exception as e_supp_viz:
+                    logger.error(f"[DISPATCHER-NORMAL-PATH] Error during supplemental viz attempt: {str(e_supp_viz)}")
+
+            # --- Supplemental Visualization Logic --- 
+            # This runs if the classified agent (e.g. ProductAgent) did not produce a visualization
+            # response_from_agent is an AgentResponse object here
+            if response_from_agent and response_from_agent.response and not response_from_agent.visualization:
+                needs_supplemental_viz = False
+                supplemental_viz_keywords = [
+                    "chart", "graph", "plot", "histogram", "visualize", "visualise", "visualization", "diagram",
+                    "show distribution", "create visualization", "draw a", "display data as", "show stock", "stock levels"
+                ]
+                if any(phrase in message_lower for phrase in supplemental_viz_keywords):
+                    needs_supplemental_viz = True
+                    logger.info(f"[DISPATCHER] Supplemental: Direct viz keyword found: '{[kw for kw in supplemental_viz_keywords if kw in message_lower]}' in '{message_lower[:60]}...'")
+                
+                if not needs_supplemental_viz:
+                    data_analysis_patterns = [
+                        r"(show|display|visualize|visualise|analyze|overview of|summary of).*(distribution|trend|comparison|breakdown|overview|summary|levels|status|quantities)",
+                        r"(compare|correlate|analyze).*(with respect to|by|over time)",
+                        r"how many.*(per|by|in each)",
+                        r"(count of|number of|total|sum of).*(per|by|group by)",
+                        r"(products|sales|revenue|expenses|employees|tasks|stock|inventory).*(levels|status|quantities|figures|numbers|data|information)"
+                    ]
+                    for pattern in data_analysis_patterns:
+                        if re.search(pattern, message_lower): 
+                            needs_supplemental_viz = True
+                            logger.info(f"[DISPATCHER] Supplemental: Data analysis pattern matched: '{pattern}' in '{message_lower[:60]}...'")
+                            break
+                            
+                if needs_supplemental_viz:
+                    logger.info(f"[DISPATCHER] Primary agent '{response_from_agent.agent_type}' provided no viz. Attempting supplemental viz for: '{message[:60]}...'")
+                    insights = response_from_agent.response 
+                    
+                    try:
+                        sql_agent_for_supplemental_viz = self._get_agent("sql")
+                        supplemental_agent_response = await sql_agent_for_supplemental_viz.generate_visualization(
+                            query=message, 
+                            company_id=company_id,
+                            user_id=user_id,
+                            session=session,
+                            conversation_id=current_conversation_id, 
+                            insights_text=insights
+                        )
+                        if supplemental_agent_response and supplemental_agent_response.visualization:
+                            logger.info(f"[DISPATCHER] Supplemental viz generated. Merging with primary response.")
+                            response_from_agent.visualization = supplemental_agent_response.visualization
+                            response_from_agent.agent_type = "visualization"
+                            # Optionally, append a note to the text response that a chart was added
+                            if response_from_agent.response and not response_from_agent.response.endswith((".", "!", "?")):
+                                response_from_agent.response += "."
+                            response_from_agent.response += " I've also created a chart for this data."
+                        else:
+                            logger.info("[DISPATCHER] Supplemental viz attempt did not yield data or visualization.")
+                    except Exception as e_supp_viz:
+                        logger.error(f"[DISPATCHER] Error during supplemental viz attempt: {str(e_supp_viz)}", exc_info=True)
+
+            logger.info(f"[DISPATCHER-NORMAL-PATH] Final response after any supplemental viz: {response_from_agent.dict(exclude_none=True)}")
             return response_from_agent
 
         except Exception as e_dispatcher_main:
             logger.error(f"[DISPATCHER] CRITICAL ERROR in process_message: {str(e_dispatcher_main)}", exc_info=True)
-            # Construct a very specific error response if the main dispatcher logic fails catastrophically
-            # Use the consistently defined current_conversation_id for this error response
-            # Do not attempt to generate a new UUID here as that might have been part of the problem
             return AgentResponse(
                 response=f"Critical Dispatcher Failure: {str(e_dispatcher_main)}",
-                conversation_id=current_conversation_id, # Use the ID established at the start
+                conversation_id=current_conversation_id, 
                 conversation_title="Dispatcher Main Error",
-                tokens_used=0,
-                tokens_remaining=None, 
-                visualization=None,
+                tokens_used=0, tokens_remaining=None, visualization=None,
                 agent_type="error_dispatcher_main"
             )
     

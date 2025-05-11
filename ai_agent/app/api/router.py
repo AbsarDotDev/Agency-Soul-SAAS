@@ -138,18 +138,22 @@ async def process_message(
     # --- Direct Visualization Path (Bypass Dispatcher for VIZ) ---
     message_lower = request.message.lower()
     viz_keywords = [
-        "visualize", "visualization", "chart", "graph", "plot", "pie chart", 
-        "bar chart", "line graph", "show me a chart", "make a graph",
-        "create chart", "generate chart", "draw chart", "display chart",
-        "employees per department", "department breakdown"
+        "visualize", "visualise", "visualization", "visualisation", "chart", "graph", "plot", "histogram", "pie chart", 
+        "bar chart", "line graph", "scatter plot", "show me a chart", "make a graph", "diagram",
+        "create chart", "generate chart", "draw chart", "display chart", "create histogram", "show histogram",
+        "employees per department", "department breakdown", "product stock", "stock available",
+        "create a bar", "create a pie", "create a graph", "create a chart", "generate a graph", "generate a chart"
     ]
-    is_visualization_request_by_keyword = any(keyword in message_lower for keyword in viz_keywords)
+    
+    # Log which visualization keywords were matched
+    matched_keywords = [kw for kw in viz_keywords if kw in message_lower]
+    is_visualization_request_by_keyword = len(matched_keywords) > 0
 
     current_conversation_id = request.conversation_id or str(uuid.uuid4())
     logger.info(f"[ROUTER] Processing message. Input ConvID: {request.conversation_id}, Using ConvID: {current_conversation_id}, Message: {request.message[:60]}")
 
     if is_visualization_request_by_keyword:
-        logger.info(f"[ROUTER-VIZ-BYPASS] Detected visualization request. Bypassing dispatcher. (ConvID: {current_conversation_id})")
+        logger.info(f"[ROUTER-VIZ-BYPASS] Detected visualization request with keywords: {matched_keywords}. Bypassing dispatcher. (ConvID: {current_conversation_id})")
         try:
             # Directly instantiate and use SQLAgent for visualization
             from app.agents.sql_agent import SQLAgent # Ensure import

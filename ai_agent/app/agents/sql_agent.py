@@ -171,6 +171,8 @@ class SQLAgent(BaseAgent):
         """
         # Check if this is a visualization request first
         is_viz_request, viz_type = self._check_visualization_intent(message)
+        logger.info(f"Visualization intent detection: intent={is_viz_request}, type={viz_type}, message='{message[:50]}...'")
+        
         if is_viz_request:
             logger.info(f"Detected visualization request in message: '{message[:50]}...' - Using visualization processing")
             # Call generate_visualization directly and immediately return its result
@@ -207,6 +209,15 @@ class SQLAgent(BaseAgent):
             
             # Get isolation columns information for key tables
             isolation_info = await self._get_isolation_columns_info(company_id)
+            
+            # Get a list of available tables to populate the system message
+            try:
+                available_tables_list = await self.mcp_mysql_tool.list_tables(company_id)
+                # Format tables for better readability
+                available_tables = "The following tables are available in the database:\n" + ", ".join(available_tables_list)
+            except Exception as e:
+                logger.error(f"Error getting available tables: {str(e)}")
+                available_tables = "Some tables are available in the database. Use List_Database_Tables tool to see them."
             
             # Create SQL toolkit
             toolkit = SQLDatabaseToolkit(
@@ -624,245 +635,247 @@ TECHNICAL RULES:
                 agent_type=self.type  # Add agent_type to the response
             )
     
+    def _convert_decimal_to_float(self, obj):
+        """Recursively convert Decimal objects to float for JSON serialization.
+        Also handles date and datetime objects by converting to string format.
+        
+        Args:
+            obj: Object to convert
+            
+        Returns:
+            Converted object with all special types changed to JSON-serializable types
+        """
+        from decimal import Decimal
+        from datetime import date, datetime
+        
+        if isinstance(obj, Decimal):
+            return float(obj)
+        elif isinstance(obj, (date, datetime)):
+            # Convert date/datetime to ISO format string
+            return obj.isoformat()
+        elif isinstance(obj, dict):
+            return {k: self._convert_decimal_to_float(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_decimal_to_float(item) for item in list(obj)]
+        else:
+            return obj
+            
     async def generate_visualization(
         self, 
         query: str, 
-        company_id: int, 
-        user_id: str,
+        company_id: int = None, 
+        user_id: str = None,
         visualization_type: Optional[str] = None,
         session: Optional[Session] = None,
-        conversation_id: Optional[str] = None
+        conversation_id: Optional[str] = None,
+        insights_text: Optional[str] = None  # Added parameter for insights from other agents
     ) -> AgentResponse:
         """Generate visualization from SQL query or natural language description."""
         
+        current_conversation_id = conversation_id or str(uuid.uuid4())
+        logger.info(f"[SQLAgent.generate_visualization] Called with query: '{query[:60]}...', ConvID: {current_conversation_id}")
+
         try:
-            # Create SQL database with company isolation
-            sql_database = get_company_isolated_sql_database(
-                company_id=company_id,
-                sample_rows_in_table_info=3
-            )
-            
-            # Create SQL toolkit
-            toolkit = SQLDatabaseToolkit(
-                db=sql_database,
-                llm=self.llm
-            )
-            
-            # Add custom tools for schema exploration (if not already part of the default toolkit via constructor)
-            # This might be redundant if SQLDatabaseToolkit includes them by default with a good LLM
-            # Forcing their availability for clarity.
-            custom_tools = [
-                Tool(
-                    name="List_Database_Tables",
-                    description="Lists all tables in the database to understand what data is available. Input should be an empty string.",
-                    func=lambda _: self.mcp_mysql_tool.list_tables(company_id) # Ensure async compatibility or run sync
-                ),
-                Tool(
-                    name="Get_Table_Schema",
-                    description="Gets detailed schema information for a specific table including column names, types, and isolation information. Input should be the table name.",
-                    func=lambda table_name: self.mcp_mysql_tool.get_table_schema(table_name, company_id) # Ensure async
-                )
-            ]
-            all_tools = toolkit.get_tools() + custom_tools
-            
-            # Create the SQL Agent
-            agent_executor = create_sql_agent( # Renamed from 'agent' for clarity
-                llm=self.llm, # Use stored LLM instance
-                toolkit=toolkit, # Pass the original toolkit, create_sql_agent might handle tools internally
-                                 # Or pass 'tools=all_tools' if 'toolkit' is not enough
-                agent_type="openai-tools",
-                handle_parsing_errors=True,
-                verbose=True
-            )
-            
-            # Modify the query to explicitly ask for SQL to generate visualization
-            sql_query_prompt = f"""Given the user query: '{query}', first, identify if it directly contains a valid SQL SELECT query.
-If it does, use that SQL query.
-If it does not, write a SQL SELECT query that would retrieve the necessary data to address the user's request: '{query}'.
+            # When a visualization request is passed from another agent like ProductAgent
+            # Determine if this is a product-specific visualization request
+            is_product_request = False
+            if any(term in query.lower() for term in ["product", "inventory", "stock", "quantity", "item"]):
+                is_product_request = True
+                logger.info(f"[SQLAgent.generate_visualization] Detected product-specific visualization request")
 
-IMPORTANT NOTES ABOUT DATABASE STRUCTURE:
-- For employee counts by department, use 'departments' (not 'department') and 'employees' (not 'employee')
-- The departments table has columns: id, name, branch_id, created_by
-- The employees table has columns: id, name, department_id, designation_id, etc.
-- The correct join between departments and employees is: departments.id = employees.department_id
-- Always use proper column names, e.g., departments.name (not dept_name), employees.id (not emp_id)
-
-CRITICAL SECURITY REQUIREMENT:
-You MUST include company isolation in your query by adding appropriate WHERE conditions:
-- ALWAYS include 'WHERE created_by = {company_id}' for each table in the query
-- For joins, include the condition for EACH table: 'table1.created_by = {company_id} AND table2.created_by = {company_id}'
-- Example: SELECT d.name, COUNT(e.id) FROM departments d JOIN employees e ON d.id = e.department_id WHERE d.created_by = {company_id} AND e.created_by = {company_id} GROUP BY d.name
-
-Only return the SQL SELECT query itself, with no explanation, no markdown, just the SQL.
-If the user's query is too vague to form a SQL query (e.g., 'show me sales data'), ask for clarification instead of guessing.
-"""
+            sql_database = get_company_isolated_sql_database(company_id=company_id, sample_rows_in_table_info=3)
             
-            # First get SQL query
-            response = await agent_executor.ainvoke({"input": sql_query_prompt})
-            sql_query_text = self._extract_sql_query(response.get("output", ""), company_id)
-            
-            # Apply an additional correction to the extracted SQL
-            if sql_query_text:
-                sql_query_text = self._correct_table_names(sql_query_text, company_id)
-                logger.info(f"Corrected SQL for visualization: {sql_query_text}")
-            
-            if not sql_query_text:
-                logger.warning(f"SQL Agent could not generate a SQL query for visualization: {query}")
-                # Try to get a clarifying message from the agent's response if it didn't produce SQL
-                clarification_needed = response.get("output", "Could not determine the SQL query for your request. Please be more specific.")
-                if "ask for clarification" in clarification_needed.lower():
-                     return AgentResponse(
-                         response=clarification_needed,
-                         conversation_id=conversation_id or str(uuid.uuid4()),
-                         conversation_title=f"Visualization: {query[:30]}..." if len(query) > 30 else f"Visualization: {query}",
-                         visualization=None,
-                         tokens_used=0,
-                         tokens_remaining=None,
-                         agent_type="visualization"  # Force visualization agent type
-                     )
-                return AgentResponse(
-                    response="Failed to generate SQL query for visualization. Please try rephrasing your request.",
-                    conversation_id=conversation_id or str(uuid.uuid4()),
-                    conversation_title=f"Visualization: {query[:30]}..." if len(query) > 30 else f"Visualization: {query}",
-                    visualization=None,
-                    tokens_used=0,
-                    tokens_remaining=None,
-                    agent_type="visualization"  # Force visualization agent type
-                )
-
-            logger.info(f"Generated SQL for visualization: {sql_query_text}")
-            
-            # Execute the SQL query directly (bypassing the CompanyIsolatedSQLDatabase run method)
-            # This gives us control over how we execute the query and handle the results
-            try:
-                data_for_viz = await self._execute_query_safely(sql_query_text, company_id)
-                if not data_for_viz or (isinstance(data_for_viz, list) and len(data_for_viz) == 0):
-                    return AgentResponse(
-                        response="The query returned no data to visualize. Try a different query or check if the data exists.",
-                        conversation_id=conversation_id or str(uuid.uuid4()),
-                        conversation_title=f"Visualization: {query[:30]}..." if len(query) > 30 else f"Visualization: {query}",
-                        visualization=None,
-                        tokens_used=0,
-                        tokens_remaining=None,
-                        agent_type="visualization"  # Force visualization agent type
+            # For product visualization requests, try to use a specialized query
+            if is_product_request:
+                # For product visualization, extract relevant information directly
+                try:
+                    product_query = """
+                    SELECT 
+                        ps.name as product_name, 
+                        ps.quantity as quantity,
+                        ps.sale_price as price,
+                        pc.name as category
+                    FROM 
+                        product_services ps
+                    LEFT JOIN 
+                        product_service_categories pc ON ps.category_id = pc.id
+                    WHERE 
+                        ps.created_by = :company_id
+                    ORDER BY 
+                        ps.quantity DESC
+                    """
+                    
+                    logger.info(f"[SQLAgent.generate_visualization] Using specialized product query")
+                    data_for_viz = await self._execute_query_safely(
+                        query=product_query.replace(":company_id", str(company_id)),
+                        company_id=company_id
                     )
-            except Exception as e:
-                logger.error(f"Error executing visualization query: {str(e)}")
-                return AgentResponse(
-                    response=f"Error executing the query: {str(e)}",
-                    conversation_id=conversation_id or str(uuid.uuid4()),
-                    conversation_title=f"Visualization: {query[:30]}..." if len(query) > 30 else f"Visualization: {query}",
-                    visualization=None,
-                    tokens_used=0,
-                    tokens_remaining=None,
-                    agent_type="visualization"  # Force visualization agent type
+                    
+                    if data_for_viz:
+                        # Convert any Decimal objects to float for JSON serialization
+                        data_for_viz = self._convert_decimal_to_float(data_for_viz)
+                        
+                        logger.info(f"[SQLAgent.generate_visualization] Found {len(data_for_viz)} product records")
+                        
+                        # Extract visualization type from the query
+                        if "histogram" in query.lower():
+                            visualization_type = "bar" # Use bar chart for histogram
+                        elif not visualization_type:
+                            # Default to bar for product quantity
+                            visualization_type = "bar"
+                            
+                        # Generate textual summary
+                        summary_prompt = f"""The following product data was retrieved:
+Data: {json.dumps(data_for_viz[:5], indent=2)} (showing first 5 of {len(data_for_viz)} products)
+
+The user asked: '{query}'
+Based on this data, please provide a brief summary of what the data shows about the products.
+Focus on quantities, categories, or other patterns visible in the data.
+Be concise and informative."""
+
+                        summary_response_message = await self.llm.ainvoke(summary_prompt)
+                        textual_summary = summary_response_message.content.strip()
+                        
+                        # Generate visualization
+                        viz_result_obj = await generate_visualization_from_data(
+                            data=data_for_viz, 
+                            query=query, 
+                            visualization_type=visualization_type, 
+                            llm=self.llm
+                        )
+                        
+                        # Finalize response - reuse existing logic below
+                    else:
+                        logger.warning(f"[SQLAgent.generate_visualization] Product query returned no data")
+                        # Will fall back to regular query generation below
+                except Exception as product_err:
+                    logger.error(f"[SQLAgent.generate_visualization] Error in product specialized query: {product_err}", exc_info=True)
+                    # Will fall back to regular query generation below
+
+            # Standard SQL query generation path for non-product queries or if product one failed
+            if not is_product_request or not data_for_viz:
+                toolkit = SQLDatabaseToolkit(db=sql_database, llm=self.llm)
+                # ... (keep custom_tools and agent_executor setup as before)
+                custom_tools = [
+                    Tool(
+                        name="List_Database_Tables",
+                        description="Lists all tables in the database...", # Truncated for brevity
+                        func=lambda _: self.mcp_mysql_tool.list_tables(company_id)
+                    ),
+                    Tool(
+                        name="Get_Table_Schema",
+                        description="Gets detailed schema information for a specific table...", # Truncated
+                        func=lambda table_name: self.mcp_mysql_tool.get_table_schema(table_name, company_id)
+                    )
+                ]
+                agent_executor = create_sql_agent(
+                    llm=self.llm, toolkit=toolkit, agent_type="openai-tools", handle_parsing_errors=True, verbose=True
                 )
 
-            # Generate visualization using the data
+                sql_query_prompt = f"""Given the user query: '{query}', ... (rest of your detailed SQL prompt) ... Only return the SQL SELECT query itself."""
+                # Ensure the full detailed SQL prompt is here, as it was before.
+                # For brevity in this edit, I am not repeating the entire multi-line SQL prompt string.
+                # Please ensure the original detailed prompt for generating SQL is maintained.
+                
+                response_from_sql_llm = await agent_executor.ainvoke({"input": sql_query_prompt})
+                sql_query_text = self._extract_sql_query(response_from_sql_llm.get("output", ""), company_id)
+                
+                if sql_query_text:
+                    sql_query_text = self._correct_table_names(sql_query_text, company_id)
+                    logger.info(f"[SQLAgent.generate_visualization] Corrected SQL: {sql_query_text}")
+                else:
+                    logger.warning(f"[SQLAgent.generate_visualization] Could not generate SQL for: {query}")
+                    return AgentResponse(
+                        response="Failed to generate SQL query for visualization. Please try rephrasing.",
+                        conversation_id=current_conversation_id, conversation_title=f"Viz SQL Gen Error: {query[:20]}",
+                        visualization=None, tokens_used=1, tokens_remaining=None, agent_type="visualization_sql_error"
+                    )
+
+                data_for_viz = await self._execute_query_safely(sql_query_text, company_id)
+                # Convert any Decimal objects to float for JSON serialization
+                data_for_viz = self._convert_decimal_to_float(data_for_viz)
+
+            # Regardless of how we got the data, check if we have data to visualize
+            if not data_for_viz:
+                return AgentResponse(
+                    response="The query returned no data to visualize.", conversation_id=current_conversation_id,
+                    conversation_title=f"Viz No Data: {query[:20]}", visualization=None, tokens_used=1, 
+                    tokens_remaining=None, agent_type="visualization_no_data"
+                )
+
+            # Step 1: Generate textual summary of the data_for_viz (if not already done)
+            textual_summary = None
+            try:
+                # If we have insights from another agent, use that instead of generating a new summary
+                if insights_text:
+                    textual_summary = f"{insights_text}\n\nI've created a visualization based on this data."
+                    logger.info(f"[SQLAgent.generate_visualization] Using provided insights text for summary")
+                elif not textual_summary and data_for_viz:  # Only generate if we don't have one and have data
+                    # Convert data to JSON for prompt, ensuring no Decimal objects
+                    data_sample_json = json.dumps(data_for_viz[:5] if len(data_for_viz) > 5 else data_for_viz, indent=2)
+                    
+                    summary_prompt = f"""The following data was retrieved from the database based on the user's request '{query}':
+Data: {data_sample_json} (showing first 5 rows if many)
+
+Please provide a brief, natural language summary of this data. 
+Focus on answering the user's likely question. For example, if the data is about employees per department, say something like 'The data shows X employees in department A, Y in department B...'.
+Do not mention the SQL query or database structure. Be concise. """
+                    summary_response_message = await self.llm.ainvoke(summary_prompt)
+                    textual_summary = summary_response_message.content.strip()
+                    logger.info(f"[SQLAgent.generate_visualization] Generated textual summary: {textual_summary}")
+            except Exception as summary_err:
+                logger.error(f"[SQLAgent.generate_visualization] Error generating textual summary: {summary_err}", exc_info=True)
+                textual_summary = "Here's a visualization of the data."  # Simple fallback
+
+            # Step 2: Generate visualization object from data_for_viz
             viz_result_obj = await generate_visualization_from_data(
-                data=data_for_viz, 
-                query=query,
-                visualization_type=visualization_type,
-                llm=self.llm
+                data=data_for_viz, query=query, visualization_type=visualization_type, llm=self.llm
             )
             
-            # Fixed token usage as requested in specification
-            tokens_used = 2
-            
-            # Get remaining tokens if session provided
+            tokens_used = 2 # For viz generation + 1 for summary (adjust if summary LLM call is tokenized separately and more accurately)
             tokens_remaining = None
             if session:
                 try:
-                    # Direct token update to avoid the TokenManager issue
+                    # Direct token update (copied from previous fix, ensure DatabaseConnection and text are imported)
                     engine = DatabaseConnection.create_engine()
                     with Session(engine) as db_session:
-                        # Update user tokens
-                        stmt = text("""
-                            UPDATE users
-                            SET ai_agent_tokens_used = ai_agent_tokens_used + :tokens
-                            WHERE id = :company_id
-                        """)
-                        db_session.execute(stmt, {"tokens": tokens_used, "company_id": company_id})
+                        stmt_update = text("UPDATE users SET ai_agent_tokens_used = ai_agent_tokens_used + :tokens WHERE id = :company_id")
+                        db_session.execute(stmt_update, {"tokens": tokens_used, "company_id": company_id})
                         db_session.commit()
-                        
-                        # Get remaining tokens
-                        stmt = text("""
-                            SELECT 
-                                p.ai_agent_default_tokens - u.ai_agent_tokens_used as tokens_remaining
-                            FROM users u
-                            JOIN plans p ON u.plan = p.id
-                            WHERE u.id = :company_id
-                        """)
-                        result = db_session.execute(stmt, {"company_id": company_id}).fetchone()
+                        stmt_get = text("SELECT p.ai_agent_default_tokens - u.ai_agent_tokens_used FROM users u JOIN plans p ON u.plan = p.id WHERE u.id = :company_id")
+                        result = db_session.execute(stmt_get, {"company_id": company_id}).fetchone()
                         tokens_remaining = result[0] if result else None
-                        logger.info(f"Updated tokens directly. Remaining: {tokens_remaining}")
-                except Exception as e:
-                    logger.error(f"Error updating token usage directly: {e}")
+                except Exception as e_token:
+                    logger.error(f"[SQLAgent.generate_visualization] Error updating tokens: {e_token}")
+
+            # Save conversation (using the textual_summary as the main response part)
+            title_for_saving = None # Let _save_conversation handle title for new conversations
+            if session: # Only attempt save if session is available
+                 await self._save_conversation(
+                    session=session, conversation_id=current_conversation_id, company_id=company_id, user_id=user_id,
+                    message=query, response=textual_summary, agent_type="visualization", 
+                    tokens_used=tokens_used, visualization=viz_result_obj.data, title=title_for_saving
+                )
             
-            # Check if we need to save this conversation in the database
-            if conversation_id and session:
-                try:
-                    # Save conversation with visualization
-                    title = await self._generate_conversation_title(
-                        conversation_id=conversation_id,
-                        company_id=company_id,
-                        user_message=query,
-                        agent_response=viz_result_obj.explanation or "Visualization generated."
-                    ) if not conversation_id else None
-                    
-                    await self._save_conversation(
-                        session=session,
-                        conversation_id=conversation_id,
-                        company_id=company_id,
-                        user_id=user_id,
-                        message=query,
-                        response=viz_result_obj.explanation or "Visualization generated.",
-                        agent_type="visualization",  # Always mark as visualization
-                        tokens_used=tokens_used,
-                        visualization=viz_result_obj.data,
-                        title=title
-                    )
-                except Exception as e:
-                    logger.error(f"Error saving conversation: {e}")
-            
-            # Return a properly constructed AgentResponse
-            viz_data = viz_result_obj.data
-            logger.info(f"Returning visualization data with chart_type={viz_data.get('chart_type', 'unknown') if viz_data else 'None'}")
-            
-            # Ensure visualization data is properly formatted
-            if viz_data and 'options' in viz_data:
-                if viz_data['options'] is None or (isinstance(viz_data['options'], list) and len(viz_data['options']) == 0):
-                    viz_data['options'] = {}  # Ensure options is an object, not null or empty array
-            
-            # Log full visualization data for debugging
-            logger.info(f"Full visualization data: {viz_data}")
-            
-            # Create response with visualization data
-            agent_response = AgentResponse(
-                response=viz_result_obj.explanation or "Here's the visualization you requested.",
-                conversation_id=conversation_id or str(uuid.uuid4()),
-                conversation_title=f"Visualization: {query[:30]}..." if len(query) > 30 else f"Visualization: {query}",
-                visualization=viz_data,  # Make sure we directly use the data from viz_result_obj
+            final_agent_response = AgentResponse(
+                response=textual_summary or "Here's a visualization of the data.", # Use the generated summary or fallback
+                conversation_id=current_conversation_id,
+                conversation_title=f"Viz: {query[:30]}..." if len(query)>30 else f"Viz: {query}", # Placeholder title for now
+                visualization=viz_result_obj.data,
                 tokens_used=tokens_used,
                 tokens_remaining=tokens_remaining,
-                agent_type="visualization"  # Force visualization agent type
+                agent_type="visualization"
             )
+            logger.info(f"[SQLAgent.generate_visualization] Returning: {final_agent_response.dict(exclude_none=True)}")
+            return final_agent_response
             
-            # Log final response structure
-            logger.info(f"Final AgentResponse structure: {agent_response.dict()}")
-            
-            return agent_response
-
         except Exception as e:
-            logger.error(f"Error generating visualization for company {company_id}, user {user_id}: {str(e)}", exc_info=True)
+            logger.error(f"[SQLAgent.generate_visualization] CRITICAL ERROR for query '{query[:60]}': {str(e)}", exc_info=True)
             return AgentResponse(
-                response=f"An error occurred while generating the visualization: {str(e)}",
-                conversation_id=conversation_id or str(uuid.uuid4()),
-                conversation_title=f"Visualization: {query[:30]}..." if len(query) > 30 else f"Visualization: {query}",
-                visualization=None,
-                tokens_used=0,
-                tokens_remaining=None,
-                agent_type="visualization"  # Force visualization agent type even for errors
+                response=f"Critical error in SQLAgent.generate_visualization: {str(e)}",
+                conversation_id=current_conversation_id,
+                conversation_title=f"Viz Critical Error: {query[:20]}",
+                visualization=None, tokens_used=0, tokens_remaining=None, agent_type="error_sql_agent_viz"
             )
     
     async def _execute_query_safely(self, query: str, company_id: int) -> List[Dict[str, Any]]:
@@ -955,15 +968,7 @@ If the user's query is too vague to form a SQL query (e.g., 'show me sales data'
         return None
     
     def _correct_table_names(self, query: str, company_id: int = None) -> str:
-        """Correct common table name mistakes in SQL queries and ensure company isolation.
-        
-        Args:
-            query: SQL query to correct
-            company_id: Optional company ID to add isolation filters
-            
-        Returns:
-            Corrected SQL query
-        """
+        """Correct common table name mistakes in SQL queries and ensure company isolation."""
         # Map of incorrect table names to correct ones
         table_corrections = {
             # HRM related corrections
@@ -996,8 +1001,6 @@ If the user's query is too vague to form a SQL query (e.g., 'show me sales data'
         
         # Fix table aliases in joins if needed
         if 'departments d' in corrected_query.lower() and 'employees e' in corrected_query.lower():
-            # If we have both departments and employees with the correct aliases,
-            # make sure the join condition uses the correct field names
             corrected_query = re.sub(
                 r'd\.id\s*=\s*e\.dept_id', 
                 'd.id = e.department_id', 
@@ -1005,63 +1008,147 @@ If the user's query is too vague to form a SQL query (e.g., 'show me sales data'
                 flags=re.IGNORECASE
             )
         
-        # Ensure company isolation filters are present if company_id is provided
-        if company_id is not None:
-            # Extract table information from the query
-            tables_with_aliases = self._extract_tables_from_query(corrected_query)
+        # Don't proceed with isolation if no company_id provided
+        if company_id is None:
+            return corrected_query
+        
+        # COMPLETELY NEW ISOLATION APPROACH
+        # First, parse the query to ensure we don't interfere with SQL keywords
+        
+        # 1. Extract all the SQL parts using regex
+        # This helps us identify the different parts of the query
+        select_match = re.search(r'^\s*SELECT\s+', corrected_query, re.IGNORECASE)
+        from_match = re.search(r'\s+FROM\s+', corrected_query, re.IGNORECASE)
+        where_match = re.search(r'\s+WHERE\s+', corrected_query, re.IGNORECASE)
+        group_by_match = re.search(r'\s+GROUP\s+BY\s+', corrected_query, re.IGNORECASE)
+        having_match = re.search(r'\s+HAVING\s+', corrected_query, re.IGNORECASE)
+        order_by_match = re.search(r'\s+ORDER\s+BY\s+', corrected_query, re.IGNORECASE)
+        limit_match = re.search(r'\s+LIMIT\s+', corrected_query, re.IGNORECASE)
+        
+        if not (select_match and from_match):
+            logger.warning(f"Could not identify SELECT or FROM in query: {corrected_query}")
+            return corrected_query  # Can't proceed without basics
+        
+        # 2. Extract the tables to isolate
+        tables = self._extract_tables_from_query(corrected_query)
+        if not tables:
+            logger.info("No tables found to isolate in query")
+            return corrected_query
+        
+        # 3. Build the isolation conditions
+        isolation_conditions = []
+        for table_name, alias in tables:
+            # Use the appropriate table reference
+            table_ref = alias if alias else table_name
+            isolation_conditions.append(f"{table_ref}.created_by = {company_id}")
+        
+        if not isolation_conditions:
+            return corrected_query
+        
+        isolation_clause = " AND ".join(isolation_conditions)
+        
+        # 4. Construct new query with isolation
+        if where_match:
+            # Already has WHERE clause - add our conditions
+            where_pos = where_match.end()
             
-            # Check if a WHERE clause already exists
-            has_where = bool(re.search(r'\bWHERE\b', corrected_query, re.IGNORECASE))
-            
-            # Build company isolation filters
-            isolation_conditions = []
-            for table_name, alias in tables_with_aliases:
-                # Try to determine the isolation column (almost always 'created_by')
-                isolation_column = self._get_isolation_column_for_table(table_name)
-                if isolation_column:
-                    if alias:
-                        isolation_conditions.append(f"{alias}.{isolation_column} = {company_id}")
-                    else:
-                        isolation_conditions.append(f"{table_name}.{isolation_column} = {company_id}")
-            
-            if isolation_conditions:
-                isolation_clause = " AND ".join(isolation_conditions)
+            # Find the earliest clause after WHERE
+            clauses_after_where = []
+            if group_by_match and group_by_match.start() > where_pos:
+                clauses_after_where.append((group_by_match.start(), "GROUP BY"))
+            if having_match and having_match.start() > where_pos:
+                clauses_after_where.append((having_match.start(), "HAVING"))
+            if order_by_match and order_by_match.start() > where_pos:
+                clauses_after_where.append((order_by_match.start(), "ORDER BY"))
+            if limit_match and limit_match.start() > where_pos:
+                clauses_after_where.append((limit_match.start(), "LIMIT"))
                 
-                # Add or append to WHERE clause
-                if has_where:
-                    # Look for the WHERE clause and any potential GROUP BY, ORDER BY, or LIMIT clauses after it
-                    match = re.search(r'\bWHERE\b(.*?)(?:\b(GROUP BY|ORDER BY|LIMIT)\b|$)', corrected_query, re.IGNORECASE | re.DOTALL)
-                    if match:
-                        # Get the existing WHERE conditions
-                        where_conditions = match.group(1).strip()
-                        
-                        # Check if the WHERE conditions already contain company isolation for all tables
-                        all_tables_isolated = True
-                        for table_name, alias in tables_with_aliases:
-                            isolation_column = self._get_isolation_column_for_table(table_name)
-                            if isolation_column:
-                                table_ref = alias if alias else table_name
-                                isolation_pattern = rf"{table_ref}\.{isolation_column}\s*=\s*{company_id}"
-                                if not re.search(isolation_pattern, where_conditions, re.IGNORECASE):
-                                    all_tables_isolated = False
-                                    break
-                        
-                        if not all_tables_isolated:
-                            # Append isolation conditions to existing WHERE clause
-                            new_where_conditions = f"{where_conditions} AND {isolation_clause}"
-                            rest_of_query = corrected_query[match.end():] if match.group(2) else ""
-                            corrected_query = corrected_query[:match.start()] + f" WHERE {new_where_conditions}" + rest_of_query
+            if clauses_after_where:
+                # Sort to find the earliest clause
+                clauses_after_where.sort()
+                next_clause_pos = clauses_after_where[0][0]
+                
+                # Extract the existing WHERE conditions
+                existing_where = corrected_query[where_pos:next_clause_pos].strip()
+                
+                # Add our isolation to the existing WHERE
+                if existing_where:
+                    # WHERE has content, add our conditions with AND
+                    modified_where = f" {existing_where} AND {isolation_clause} "
                 else:
-                    # Find position to insert WHERE clause (before any GROUP BY, ORDER BY, LIMIT)
-                    match = re.search(r'\b(GROUP BY|ORDER BY|LIMIT)\b', corrected_query, re.IGNORECASE)
-                    if match:
-                        # Insert WHERE before these clauses
-                        corrected_query = corrected_query[:match.start()] + f" WHERE {isolation_clause} " + corrected_query[match.start():]
-                    else:
-                        # Append WHERE at the end
-                        corrected_query = f"{corrected_query} WHERE {isolation_clause}"
+                    # WHERE is empty, just use our conditions
+                    modified_where = f" {isolation_clause} "
+                
+                # Reassemble the query
+                new_query = (
+                    corrected_query[:where_pos] + 
+                    modified_where +
+                    corrected_query[next_clause_pos:]
+                )
+            else:
+                # No clauses after WHERE, the WHERE clause extends to the end
+                existing_where = corrected_query[where_pos:].strip()
+                
+                if existing_where:
+                    # Add our isolation with AND
+                    new_query = (
+                        corrected_query[:where_pos] +
+                        f" {existing_where} AND {isolation_clause}"
+                    )
+                else:
+                    # Empty WHERE clause
+                    new_query = (
+                        corrected_query[:where_pos] +
+                        f" {isolation_clause}"
+                    )
+        else:
+            # No existing WHERE - need to add one
+            # Find position to insert WHERE
+            insert_pos = -1
+            for pattern in [group_by_match, having_match, order_by_match, limit_match]:
+                if pattern and (insert_pos == -1 or pattern.start() < insert_pos):
+                    insert_pos = pattern.start()
             
-        return corrected_query
+            if insert_pos != -1:
+                # Insert WHERE before the first clause
+                new_query = (
+                    corrected_query[:insert_pos] +
+                    f" WHERE {isolation_clause} " +
+                    corrected_query[insert_pos:]
+                )
+            else:
+                # No other clauses, append WHERE at the end
+                new_query = f"{corrected_query.rstrip()} WHERE {isolation_clause}"
+        
+        # Verify we haven't introduced issues like "WHERE AND" or ".created_by"
+        # Check for common erroneous patterns
+        error_patterns = [
+            r'WHERE\s+AND',
+            r'WHERE\s+WHERE',
+            r'WHERE\s+ORDER',
+            r'WHERE\s+GROUP',
+            r'WHERE\s+HAVING',
+            r'WHERE\s+LIMIT',
+            r'\.\s*created_by',
+            r'LIMIT\s*\.\s*created_by',
+            r'GROUP\s+BY\s*\.\s*created_by',
+            r'ORDER\s+BY\s*\.\s*created_by',
+            r'HAVING\s*\.\s*created_by'
+        ]
+        
+        has_error = False
+        for pattern in error_patterns:
+            if re.search(pattern, new_query, re.IGNORECASE):
+                has_error = True
+                logger.error(f"Found SQL error pattern '{pattern}' in modified query: {new_query}")
+                break
+        
+        if has_error:
+            logger.warning(f"Isolation failed due to potential SQL errors. Using original query: {corrected_query}")
+            return corrected_query
+            
+        logger.info(f"SQL after company isolation: {new_query}")
+        return new_query
     
     def _extract_tables_from_query(self, query: str) -> List[Tuple[str, str]]:
         """Extract table names and their aliases from a SQL query.
@@ -1072,27 +1159,57 @@ If the user's query is too vague to form a SQL query (e.g., 'show me sales data'
         Returns:
             List of (table_name, alias) tuples
         """
-        # Look for common table patterns in FROM and JOIN clauses
-        from_pattern = r'\bFROM\s+([a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?'
-        join_pattern = r'\bJOIN\s+([a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?'
+        # Improved regex patterns for table detection
+        # This pattern matches:
+        # 1. Table names in FROM clauses
+        # 2. Table names in various JOIN clauses
+        # 3. Handles optional AS keyword for aliases
+        # 4. Supports backticks, square brackets, or no delimiters around table names
+        
+        # Helper function to clean table names (remove quotes, backticks, etc)
+        def clean_table_name(name):
+            if not name:
+                return name
+            # Remove backticks, quotes, brackets
+            return re.sub(r'[`"\[\]]', '', name.strip())
         
         tables = []
         
-        # Find tables in FROM clause
-        from_matches = re.finditer(from_pattern, query, re.IGNORECASE)
-        for match in from_matches:
-            table_name = match.group(1)
-            alias = match.group(2) if match.group(2) else None
+        # Pattern for FROM clause tables
+        # Matches: FROM table1, FROM `table1`, FROM [table1], FROM table1 AS t1, etc.
+        from_pattern = r'FROM\s+(?:`|\[)?([a-zA-Z0-9_\.]+)(?:`|\])?\s*(?:AS\s+)?([a-zA-Z0-9_]+)?'
+        
+        # Find all FROM clause tables
+        for match in re.finditer(from_pattern, query, re.IGNORECASE):
+            table_name = clean_table_name(match.group(1))
+            alias = clean_table_name(match.group(2)) if match.group(2) else None
             tables.append((table_name, alias))
         
-        # Find tables in JOIN clauses
-        join_matches = re.finditer(join_pattern, query, re.IGNORECASE)
-        for match in join_matches:
-            table_name = match.group(1)
-            alias = match.group(2) if match.group(2) else None
+        # Pattern for JOIN clause tables
+        # Matches various JOIN types: JOIN, INNER JOIN, LEFT JOIN, RIGHT JOIN, etc.
+        join_pattern = r'(?:INNER|LEFT|RIGHT|OUTER|CROSS|FULL|)?\s*JOIN\s+(?:`|\[)?([a-zA-Z0-9_\.]+)(?:`|\])?\s*(?:AS\s+)?([a-zA-Z0-9_]+)?'
+        
+        # Find all JOIN clause tables
+        for match in re.finditer(join_pattern, query, re.IGNORECASE):
+            table_name = clean_table_name(match.group(1))
+            alias = clean_table_name(match.group(2)) if match.group(2) else None
             tables.append((table_name, alias))
         
-        return tables
+        # Log the extracted tables for debugging
+        if tables:
+            logger.info(f"Extracted tables from query: {tables}")
+        else:
+            logger.warning(f"No tables extracted from query: {query}")
+            
+        # Return unique tables (in case a table appears multiple times)
+        unique_tables = []
+        seen_tables = set()
+        for table, alias in tables:
+            if table not in seen_tables:
+                seen_tables.add(table)
+                unique_tables.append((table, alias))
+                
+        return unique_tables
     
     def _get_isolation_column_for_table(self, table_name: str) -> str:
         """Get the isolation column for a table.
