@@ -999,6 +999,9 @@ Do not mention the SQL query or database structure. Be concise. """
         for incorrect, correct in table_corrections.items():
             corrected_query = re.sub(incorrect, correct, corrected_query, flags=re.IGNORECASE)
         
+        # Specific fix for indicators table alias 'i' and column 'departments' -> 'department'
+        corrected_query = re.sub(r'\bi\.departments\b', 'i.department', corrected_query, flags=re.IGNORECASE)
+
         # Fix table aliases in joins if needed
         if 'departments d' in corrected_query.lower() and 'employees e' in corrected_query.lower():
             corrected_query = re.sub(
@@ -1129,11 +1132,11 @@ Do not mention the SQL query or database structure. Be concise. """
             r'WHERE\s+GROUP',
             r'WHERE\s+HAVING',
             r'WHERE\s+LIMIT',
-            r'\.\s*created_by',
-            r'LIMIT\s*\.\s*created_by',
-            r'GROUP\s+BY\s*\.\s*created_by',
-            r'ORDER\s+BY\s*\.\s*created_by',
-            r'HAVING\s*\.\s*created_by'
+            # r'\.\s*created_by', # Removed: This incorrectly flagged valid isolated queries
+            # r'LIMIT\s*\.\s*created_by', # Removed
+            # r'GROUP\s+BY\s*\.\s*created_by', # Removed
+            # r'ORDER\s+BY\s*\.\s*created_by', # Removed
+            # r'HAVING\s*\.\s*created_by' # Removed
         ]
         
         has_error = False
