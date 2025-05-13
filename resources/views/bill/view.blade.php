@@ -109,7 +109,7 @@
                                         </p>
                                         @if($bill->status!=0)
                                             @can('create payment bill')
-                                                <a href="#" data-url="{{ route('bill.payment',$bill->id) }}" data-ajax-popup="true" data-title="{{__('Add Payment')}}" class="btn btn-sm d-inline-flex align-items-center gap-2" data-original-title="{{__('Add Payment')}}"><i class="ti ti-report-money"></i>{{__('Add Payment')}}</a> <br>
+                                                <a href="#" data-url="{{ route('bill.payments',$bill->id) }}" data-ajax-popup="true" data-title="{{__('Add Payment')}}" class="btn btn-sm d-inline-flex align-items-center gap-2" data-original-title="{{__('Add Payment')}}"><i class="ti ti-report-money"></i>{{__('Add Payment')}}</a> <br>
                                             @endcan
                                         @endif
                                     </div>

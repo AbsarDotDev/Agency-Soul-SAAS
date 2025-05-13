@@ -725,9 +725,9 @@ class BillController extends Controller
 
 
             $vendorArr = [
-                'vender_bill_name' => $bill->name,
-                'vender_bill_number' =>$bill->bill,
-                'vender_bill_url' => $bill->url,
+                'bill_name' => $bill->name,
+                'bill_number' =>$bill->bill,
+                'bill_url' => $bill->url,
 
             ];
 
