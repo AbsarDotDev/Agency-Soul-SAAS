@@ -434,6 +434,12 @@
                 </tfoot>
             </table>
             <div class="invoice-footer">
+                @if(isset($settings_data['is_bank_transfer_enabled']) && $settings_data['is_bank_transfer_enabled'] == 'on' && !empty($settings_data['bank_details']))
+                    <div style="margin-bottom: 10px;">
+                        <b>{{__('Bank Details')}}</b><br>
+                        {!! $settings_data['bank_details'] !!}
+                    </div>
+                @endif
                 <b>{{$settings['footer_title']}}</b> <br>
                 {!! $settings['footer_notes'] !!}
             </div>

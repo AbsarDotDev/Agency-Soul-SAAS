@@ -402,6 +402,8 @@ Route::group(['middleware' => ['verified']], function () {
             Route::resource('systems', SystemController::class);
             Route::post('email-settings', [SystemController::class, 'saveEmailSettings'])->name('email.settings');
             Route::post('company-email-settings', [SystemController::class, 'saveCompanyEmailSettings'])->name('company.email.settings');
+            Route::post('company-pusher-settings', [SystemController::class, 'saveCompanyPusherSettings'])->name('company.pusher.settings');
+            Route::post('company-payment-settings', [SystemController::class, 'saveCompanyPaymentSettings'])->name('company.payment.settings');
 
             Route::post('company-settings', [SystemController::class, 'saveCompanySettings'])->name('company.settings');
             Route::post('system-settings', [SystemController::class, 'saveSystemSettings'])->name('system.settings');

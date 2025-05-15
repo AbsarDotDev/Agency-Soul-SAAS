@@ -1651,9 +1651,9 @@
                     </a>
                 </li>
 
-                @if (\Auth::user()->type == 'super admin')
+                <!-- @if (\Auth::user()->type == 'super admin')
                     @include('landingpage::menu.landingpage')
-                @endif
+                @endif -->
 
                 @if (Gate::check('manage system settings'))
                     <li

@@ -486,6 +486,14 @@ class Utility extends Model
             $settings[$row->name] = $row->value;
         }
 
+        // Merge company payment settings (bank_details, is_bank_transfer_enabled, etc.)
+        $payment_settings = self::getCompanyPaymentSetting($user_id);
+        if (!empty($payment_settings)) {
+            foreach ($payment_settings as $key => $value) {
+                $settings[$key] = $value;
+            }
+        }
+
         return $settings;
     }
 
@@ -2723,7 +2731,7 @@ class Utility extends Model
             '{task_start_date}',
             '{task_end_date}',
             '{invoice_payment_method}',
-
+            '{bank_details}', // Added for company bank details in invoice email
         ];
         $arrValue = [
             'app_name' => '-',
@@ -2864,6 +2872,7 @@ class Utility extends Model
             'task_start_date' => '',
             'task_end_date' => '',
             'invoice_payment_method' => '',
+            'bank_details' => isset($obj['bank_details']) ? $obj['bank_details'] : '-', // Add this line
          ];
 
         foreach ($obj as $key => $val) {

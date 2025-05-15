@@ -143,3 +143,5 @@
 - **2023-07-08**: Implemented SQLAgent with company data isolation
 - **2023-07-05**: Set up token tracking and validation
 - **2023-07-01**: Created initial FastAPI application structure
+## Discovered During Work
+- [ ] Debug Pusher integration for existing chat feature (Path not found, cluster issues, 500 error on send) - 2024-07-26

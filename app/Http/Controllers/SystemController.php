@@ -1806,6 +1806,51 @@ class SystemController extends Controller
         }
     }
 
+    public function saveCompanyPusherSettings(Request $request)
+    {
+        if (\Auth::user()->type == 'company') {
+
+            $request->validate(
+                [
+                    'pusher_app_id' => 'required|string|max:255',
+                    'pusher_app_key' => 'required|string|max:255',
+                    'pusher_app_secret' => 'required|string|max:255',
+                    'pusher_app_cluster' => 'required|string|max:255',
+                ]
+            );
+
+            $post = $request->all();
+            $creatorId = \Auth::user()->creatorId();
+
+            // Define the expected Pusher setting keys
+            $pusherSettingKeys = [
+                'pusher_app_id',
+                'pusher_app_key',
+                'pusher_app_secret',
+                'pusher_app_cluster'
+            ];
+
+            foreach ($pusherSettingKeys as $key) {
+                if (isset($post[$key])) {
+                    \DB::table('settings')->updateOrInsert(
+                        [
+                            'name' => $key,
+                            'created_by' => $creatorId,
+                        ],
+                        [
+                            'value' => $post[$key],
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]
+                    );
+                }
+            }
+            return redirect()->back()->with('success', __('Pusher Settings updated successfully'));
+        } else {
+            return redirect()->back()->with('error', __('Permission denied.'));
+        }
+    }
+
     public function saveSlackSettings(Request $request)
     {
         $post = [];

@@ -1522,7 +1522,7 @@
                                                     </div>
 
                                                     <!-- Stripe -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingOne">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapseOne"
@@ -1578,10 +1578,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Paypal -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwo">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapseTwo"
@@ -1669,7 +1669,7 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Paystack -->
                                                     <!-- <div class="accordion-item">
@@ -2153,7 +2153,7 @@
                                                     </div> -->
 
                                                     <!-- Skrill -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingnine">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapsenine"
@@ -2203,7 +2203,7 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- CoinGate -->
                                                     <!-- <div class="accordion-item">
@@ -5313,6 +5313,40 @@
                             {{ Form::close() }}
                         </div>
                     </div> --}}
+
+                    <!-- Pusher Settings Card -->
+                    <div id="pusher-settings" class="card">
+                        <div class="card-header">
+                            <h5>{{__('Pusher Settings')}}</h5>
+                            <small class="text-muted">{{__('Edit your pusher settings')}}</small>
+                        </div>
+                        <div class="card-body">
+                            {{ Form::open(['route' => 'company.pusher.settings', 'method' => 'post']) }}
+                            <div class="row">
+                                <div class="form-group col-md-6">
+                                    {{ Form::label('pusher_app_id', __('Pusher App ID'), ['class' => 'form-label']) }}
+                                    {{ Form::text('pusher_app_id', isset($settings['pusher_app_id']) ? $settings['pusher_app_id'] : '', ['class' => 'form-control', 'placeholder' => __('Enter Pusher App ID')]) }}
+                                </div>
+                                <div class="form-group col-md-6">
+                                    {{ Form::label('pusher_app_key', __('Pusher App Key'), ['class' => 'form-label']) }}
+                                    {{ Form::text('pusher_app_key', isset($settings['pusher_app_key']) ? $settings['pusher_app_key'] : '', ['class' => 'form-control', 'placeholder' => __('Enter Pusher App Key')]) }}
+                                </div>
+                                <div class="form-group col-md-6">
+                                    {{ Form::label('pusher_app_secret', __('Pusher App Secret'), ['class' => 'form-label']) }}
+                                    {{ Form::text('pusher_app_secret', isset($settings['pusher_app_secret']) ? $settings['pusher_app_secret'] : '', ['class' => 'form-control', 'placeholder' => __('Enter Pusher App Secret')]) }}
+                                </div>
+                                <div class="form-group col-md-6">
+                                    {{ Form::label('pusher_app_cluster', __('Pusher App Cluster'), ['class' => 'form-label']) }}
+                                    {{ Form::text('pusher_app_cluster', isset($settings['pusher_app_cluster']) ? $settings['pusher_app_cluster'] : '', ['class' => 'form-control', 'placeholder' => __('Enter Pusher App Cluster')]) }}
+                                </div>
+                            </div>
+                            <div class="card-footer text-end">
+                                <button class="btn btn-primary" type="submit">{{__('Save Changes')}}</button>
+                            </div>
+                            {{ Form::close() }}
+                        </div>
+                    </div>
+                    {{-- End Pusher Settings Card --}}
 
                 </div>
             </div>

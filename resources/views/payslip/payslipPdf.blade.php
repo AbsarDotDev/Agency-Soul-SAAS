@@ -17,7 +17,7 @@
     $meta_image = \App\Models\Utility::get_file('uploads/meta/');
     $meta_logo = isset($getseo['meta_image']) ? $getseo['meta_image'] : '';
     $get_cookie = \App\Models\Utility::getCookieSetting();
-    $company_logo=Utility::getValByName('company_logo');
+    $company_logo = \App\Models\Utility::GetLogo();
 
 @endphp
 <!DOCTYPE html>
