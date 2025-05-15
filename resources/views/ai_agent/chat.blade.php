@@ -640,265 +640,208 @@
         function displayVisualization(vizData) {
             console.log("[displayVisualization] Called with data:", vizData);
             
-            // Handle potential stringified JSON object
             if (typeof vizData === 'string') {
                 try {
-                    console.log("[displayVisualization] Converting string to JSON object");
                     vizData = JSON.parse(vizData);
                 } catch (err) {
                     console.error("[displayVisualization] Failed to parse visualization string data:", err);
+                    displayMessage('agent', 'Received unparseable data for visualization.', null);
                     return;
                 }
             }
             
-            if (!vizData || !vizData.chart_type || !vizData.labels || !vizData.datasets) {
-                console.error('[displayVisualization] Invalid visualization data received:', vizData);
+            // Handle both structures: direct (vizData.labels/datasets) and nested (vizData.data.labels/datasets)
+            let chartData = {};
+            
+            if (vizData.labels && vizData.datasets) {
+                // Direct structure from our backend
+                chartData = {
+                    labels: vizData.labels,
+                    datasets: vizData.datasets
+                };
+            } else if (vizData.data && vizData.data.labels && vizData.data.datasets) {
+                // Nested data structure
+                chartData = vizData.data;
+            } else {
+                console.error('[displayVisualization] Invalid visualization data structure received:', vizData);
                 displayMessage('agent', 'Received invalid data for visualization.', null);
                 return;
             }
-
-            // Normalize the data to avoid common issues
-            if (Array.isArray(vizData.options)) {
-                vizData.options = {};
-                console.log("[displayVisualization] Converted options from array to object");
-            }
+            
+            const chartType = vizData.chart_type;
+            const chartTitle = vizData.title || 'Generated Chart'; // Use provided title or a default
+            const chartOptionsFromData = vizData.options || {};
 
             // Generate unique ID for this chart
             const chartId = `chart-${Date.now()}`;
-            console.log(`[displayVisualization] Creating chart container with ID: ${chartId}`);
             
-            // Create a dedicated container with better styling for the visualization
             const $vizContainer = $('<div class="visualization-container p-3 my-3 border rounded bg-white shadow-sm"></div>');
-            
-            // Add a message indicating this is a visualization
             const $vizHeader = $('<div class="mb-2 text-sm text-gray-600"><i class="fas fa-chart-bar mr-1"></i> Generated visualization:</div>');
-            
-            // Add a title if available, with better styling
-            const $title = vizData.title ? 
-                $(`<h6 class="font-weight-bold text-center mb-2">${vizData.title}</h6>`) : '';
-            
-            // Create responsive chart wrapper
-            const $chartWrapper = $('<div class="chart-wrapper" style="position: relative; height: 250px; width: 100%; max-width: 500px; margin: 0 auto;"></div>');
-            
-            // Create canvas with proper dimensions
+            const $titleElement = chartTitle ? 
+                $(`<h6 class="font-weight-bold text-center mb-2">${chartTitle}</h6>`) : '';
+            const $chartWrapper = $('<div class="chart-wrapper" style="position: relative; height: 300px; width: 100%; max-width: 600px; margin: 0 auto;"></div>'); // Adjusted default height
             const $canvas = $(`<canvas id="${chartId}" style="max-width: 100%;"></canvas>`);
             
-            // Add canvas to the wrapper
             $chartWrapper.append($canvas);
-
-            // Assemble the container
-            $vizContainer.append($vizHeader);
-            $vizContainer.append($title);
-            $vizContainer.append($chartWrapper);
-            
-            // Append container and ensure it's in the DOM before getting context
+            $vizContainer.append($vizHeader).append($titleElement).append($chartWrapper);
             $chatHistory.append($vizContainer);
-            console.log("[displayVisualization] Appended viz container to chat history.");
-            
-            // Scroll to bottom to show the new visualization
             scrollToBottom();
 
-            // Function to create the chart with retry capability
             function createChart(attempt = 1) {
                 const canvas = document.getElementById(chartId);
                 if (!canvas) {
                     console.error(`[displayVisualization] Canvas element #${chartId} NOT found on attempt ${attempt}`);
                     if (attempt < 3) {
-                        console.log(`[displayVisualization] Retrying in ${attempt * 200}ms...`);
                         setTimeout(() => createChart(attempt + 1), attempt * 200);
                     } else {
-                        $vizContainer.append(`
-                            <div class="alert alert-warning mt-2">
-                                <strong>Visualization error:</strong> Could not create the chart canvas after ${attempt} attempts.
-                                <br><small>Please try refreshing the page.</small>
-                            </div>
-                        `);
+                        $vizContainer.append('<div class="alert alert-warning mt-2"><strong>Visualization error:</strong> Could not create chart canvas.</div>');
                     }
                     return;
                 }
 
-                console.log(`[displayVisualization] Canvas element #${chartId} found. Creating chart...`);
                 try {
-                    // Ensure Chart.js is available
                     if (typeof Chart === 'undefined') {
                         console.error('[displayVisualization] Chart.js library is not available!');
-                        
-                        if (!chartJsLoaded) {
-                            // Try loading Chart.js if not already attempted
-                            const loaded = checkChartJsLoaded();
-                            if (loaded) {
-                                // If loaded successfully, retry after a brief delay
-                                setTimeout(() => createChart(attempt + 1), 500);
-                                return;
-                            }
+                        if (!chartJsLoaded && checkChartJsLoaded()) {
+                            setTimeout(() => createChart(attempt + 1), 500);
+                            return;
                         }
-                        
-                        $vizContainer.append('<div class="alert alert-danger mt-2">Chart library not loaded. Please refresh the page.</div>');
+                        $vizContainer.append('<div class="alert alert-danger mt-2">Chart library not loaded. Please refresh.</div>');
                         return;
                     }
                     
-                    // Prepare chart configuration
-                    const chartOptions = typeof vizData.options === 'object' && !Array.isArray(vizData.options) 
-                        ? vizData.options : {};
-                    
-                    // Add responsive option if not set
-                    chartOptions.responsive = true;
-                    chartOptions.maintainAspectRatio = false;
-                    
-                    console.log(`[displayVisualization] Creating ${vizData.chart_type} chart with options:`, chartOptions);
-                    
-                    // Specific configurations based on chart type
-                    if (vizData.chart_type === 'pie' || vizData.chart_type === 'doughnut') {
-                        // For pie charts, center the legend and make it smaller
-                        chartOptions.plugins = chartOptions.plugins || {};
-                        chartOptions.plugins.legend = chartOptions.plugins.legend || {};
-                        chartOptions.plugins.legend.position = 'bottom';
-                        chartOptions.plugins.legend.labels = chartOptions.plugins.legend.labels || {};
-                        chartOptions.plugins.legend.labels.boxWidth = 12;
-                        chartOptions.plugins.legend.labels.font = { size: 11 };
-                        
-                        // Add percentage to tooltips
-                        chartOptions.plugins.tooltip = chartOptions.plugins.tooltip || {};
-                        chartOptions.plugins.tooltip.callbacks = chartOptions.plugins.tooltip.callbacks || {};
-                        chartOptions.plugins.tooltip.callbacks.label = function(context) {
-                            const label = context.label || '';
-                            const value = context.raw || 0;
-                            const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                            const percentage = Math.round((value / total) * 100);
-                            return `${label}: ${value} (${percentage}%)`;
-                        };
-                    } else if (vizData.chart_type === 'bar') {
-                        // For bar charts, prevent overcrowding with custom layout options
-                        chartOptions.plugins = chartOptions.plugins || {};
-                        chartOptions.plugins.legend = chartOptions.plugins.legend || {};
-                        chartOptions.plugins.legend.position = 'top';
-                        
-                        // Rotate labels if there are many
-                        if (vizData.labels && vizData.labels.length > 5) {
-                            chartOptions.scales = chartOptions.scales || {};
-                            chartOptions.scales.x = chartOptions.scales.x || {};
-                            chartOptions.scales.x.ticks = chartOptions.scales.x.ticks || {};
-                            chartOptions.scales.x.ticks.maxRotation = 45;
-                            chartOptions.scales.x.ticks.minRotation = 45;
-                        }
+                    // Check if we have data to work with
+                    if (!chartData || !chartData.datasets || !chartData.datasets.length) {
+                        console.error('[displayVisualization] Missing datasets in chart data');
+                        $vizContainer.append('<div class="alert alert-warning mt-2">Could not display chart: missing datasets</div>');
+                        return;
                     }
                     
-                    // Add animation for better UX
-                    chartOptions.animation = {
-                        duration: 800,
-                        easing: 'easeOutQuad'
-                    };
-                    
-                    // Add tooltip configuration
-                    chartOptions.plugins = chartOptions.plugins || {};
-                    chartOptions.plugins.tooltip = chartOptions.plugins.tooltip || {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
+                    // Default options, can be overridden by vizData.options
+                    let finalChartOptions = {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: {
+                            duration: 800,
+                            easing: 'easeOutQuad'
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) label += ': ';
+                                        if (context.parsed.y !== null) label += context.parsed.y;
+                                        else if (context.parsed !== null && typeof context.parsed === 'object') label += JSON.stringify(context.parsed);
+                                        else label += context.raw;
+                                        return label;
+                                    }
                                 }
-                                label += context.parsed.y || context.parsed || context.raw || '';
-                                return label;
                             }
                         }
                     };
+
+                    // Merge options from vizData
+                    // Deep merge could be used here if more complex option structures are expected
+                    $.extend(true, finalChartOptions, chartOptionsFromData); 
+
+                    // Specific configurations based on chart type (can be enhanced or moved to Python)
+                    if (chartType === 'pie' || chartType === 'doughnut') {
+                        finalChartOptions.plugins.legend.position = 'bottom';
+                        finalChartOptions.plugins.legend.labels = finalChartOptions.plugins.legend.labels || {};
+                        finalChartOptions.plugins.legend.labels.boxWidth = 12;
+                        finalChartOptions.plugins.legend.labels.font = { size: 11 };
+                        finalChartOptions.plugins.tooltip.callbacks.label = function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.chart.data.datasets[0].data.reduce((a, b) => parseFloat(a) + parseFloat(b), 0);
+                            const percentage = total ? Math.round((value / total) * 100) : 0;
+                            return `${label}: ${value} (${percentage}%)`;
+                        };
+                    } else if (chartType === 'bar' || chartType === 'horizontalBar') {
+                        if (chartData.labels && chartData.labels.length > 8) { // More aggressive rotation
+                            finalChartOptions.scales = finalChartOptions.scales || {};
+                            finalChartOptions.scales.x = finalChartOptions.scales.x || {};
+                            finalChartOptions.scales.x.ticks = finalChartOptions.scales.x.ticks || {};
+                            finalChartOptions.scales.x.ticks.maxRotation = 45;
+                            finalChartOptions.scales.x.ticks.minRotation = 45;
+                        }
+                    }
                     
+                    // If a title was provided in vizData.title, and not already handled by vizData.options
+                    if (chartTitle && (!finalChartOptions.plugins.title || !finalChartOptions.plugins.title.text)){
+                        finalChartOptions.plugins.title = {
+                            display: true,
+                            text: chartTitle,
+                            font: { size: 16 }
+                        };
+                    }
+
                     console.log("[displayVisualization] Chart config:", {
-                        type: vizData.chart_type,
-                        data: {
-                            labels: vizData.labels,
-                            datasets: vizData.datasets
-                        },
-                        options: chartOptions
+                        type: chartType,
+                        data: chartData, // chartData now directly contains labels and datasets
+                        options: finalChartOptions
                     });
                     
-                    // Create the chart
                     const chart = new Chart(canvas, {
-                        type: vizData.chart_type,
-                        data: {
-                            labels: vizData.labels,
-                            datasets: vizData.datasets
-                        },
-                        options: chartOptions
+                        type: chartType,
+                        data: chartData, 
+                        options: finalChartOptions
                     });
                     
                     console.log(`[displayVisualization] Chart #${chartId} created successfully.`);
                     
-                    // Add a compact data summary below the chart for accessibility
-                    let dataSummary = '<div class="mt-2 p-2 bg-light rounded text-muted small" style="font-size: 0.85rem;">';
+                    // Data summary (can be kept or removed based on preference)
+                    let dataSummaryHtml = '<div class="mt-2 p-2 bg-light rounded text-muted small" style="font-size: 0.85rem;">';
                     
-                    // Calculate total for percentage if applicable
-                    let total = 0;
-                    if (vizData.chart_type === 'pie' || vizData.chart_type === 'doughnut') {
-                        total = vizData.datasets[0].data.reduce((sum, val) => sum + val, 0);
+                    // Safety check for the data structure
+                    if (!chartData || !chartData.datasets || !chartData.labels || !chartData.datasets[0] || !chartData.datasets[0].data) {
+                        dataSummaryHtml += '<div>No detailed data available</div>';
+                    } 
+                    else if (chartType === 'pie' || chartType === 'doughnut') {
+                        try {
+                            const total = chartData.datasets[0].data.reduce((sum, val) => sum + parseFloat(val), 0);
+                            dataSummaryHtml += '<div class="row gx-1">';
+                            chartData.labels.forEach((label, i) => {
+                                const value = parseFloat(chartData.datasets[0].data[i]);
+                                const percent = total ? Math.round((value / total) * 100) : 0;
+                                const bgColor = chartData.datasets[0].backgroundColor ? 
+                                    (Array.isArray(chartData.datasets[0].backgroundColor) ? 
+                                        (chartData.datasets[0].backgroundColor[i] || '#ccc') : 
+                                        chartData.datasets[0].backgroundColor) : '#ccc';
+                                dataSummaryHtml += `<div class="col-6 col-sm-4 mb-1"><span class="d-inline-block me-1" style="width:10px; height:10px; background-color:${bgColor}"></span><strong>${label}:</strong> ${value} (${percent}%)</div>`;
+                            });
+                            dataSummaryHtml += '</div>';
+                        } catch (e) {
+                            console.error("Error generating pie/doughnut data summary:", e);
+                            dataSummaryHtml += '<div>Error generating data summary</div>';
+                        }
+                    } else if (chartData.datasets.length > 0 && chartData.labels) {
+                        try {
+                            dataSummaryHtml += '<div><strong>Data:</strong> ';
+                            dataSummaryHtml += chartData.labels.map((label, i) => {
+                                // Attempt to show data from the first dataset for summary
+                                const value = chartData.datasets[0].data[i]; 
+                                return `${label}: ${value}`;
+                            }).join(', ');
+                            dataSummaryHtml += '</div>';
+                        } catch (e) {
+                            console.error("Error generating chart data summary:", e);
+                            dataSummaryHtml += '<div>Error generating data summary</div>';
+                        }
                     }
-                    
-                    // Format the summary based on chart type
-                    if (vizData.chart_type === 'pie' || vizData.chart_type === 'doughnut') {
-                        // For pie charts, show percentages
-                        dataSummary += '<div class="row gx-1">';
-                        vizData.labels.forEach((label, i) => {
-                            const value = vizData.datasets[0].data[i];
-                            const percent = Math.round((value / total) * 100);
-                            const bgColor = vizData.datasets[0].backgroundColor[i] || '#ccc';
-                            
-                            dataSummary += `
-                                <div class="col-6 col-sm-4 mb-1">
-                                    <span class="d-inline-block me-1" style="width:10px; height:10px; background-color:${bgColor}"></span>
-                                    <strong>${label}:</strong> ${value} (${percent}%)
-                                </div>`;
-                        });
-                        dataSummary += '</div>';
-                    } else {
-                        // For other charts, simple list
-                        dataSummary += '<div><strong>Data:</strong> ';
-                        dataSummary += vizData.labels.map((label, i) => {
-                            const value = vizData.datasets[0].data[i];
-                            return `${label}: ${value}`;
-                        }).join(', ');
-                        dataSummary += '</div>';
-                    }
-                    
-                    dataSummary += '</div>';
-                    $vizContainer.append(dataSummary);
+                    dataSummaryHtml += '</div>';
+                    $vizContainer.append(dataSummaryHtml);
                     
                 } catch (error) {
                     console.error(`[displayVisualization] Error creating chart #${chartId}:`, error);
-                    
-                    // Try to load Chart.js if it failed
-                    if (typeof Chart === 'undefined' && attempt < 2) {
-                        console.log("[displayVisualization] Attempting to load Chart.js dynamically...");
-                        const script = document.createElement('script');
-                        script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-                        script.onload = function() {
-                            console.log("[displayVisualization] Chart.js loaded successfully, retrying...");
-                            createChart(attempt + 1);
-                        };
-                        document.head.appendChild(script);
-                        return;
-                    }
-                    
-                    // Display an error message in the visualization container
-                    $vizContainer.append(`
-                        <div class="alert alert-danger mt-2">
-                            <strong>Error creating chart:</strong> ${error.message}
-                            <br><small>Please try a different visualization type.</small>
-                            <button class="btn btn-sm btn-outline-primary mt-2 retry-chart-btn" data-chart-id="${chartId}">
-                                Retry
-                            </button>
-                        </div>
-                    `);
-                    
-                    // Add retry handler
-                    $vizContainer.find('.retry-chart-btn').on('click', function() {
-                        $(this).prop('disabled', true).text('Retrying...');
-                        createChart(attempt + 1);
-                    });
+                    $vizContainer.append(`<div class="alert alert-danger mt-2"><strong>Error creating chart:</strong> ${error.message}</div>`);
                 }
             }
             
-            // Start chart creation with a small delay
             setTimeout(() => createChart(1), 300);
         }
         // --- END NEW Function ---
@@ -979,4 +922,4 @@
             </div>
         </div>
     </div>
-@endsection 
+@endsection

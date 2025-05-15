@@ -1,27 +1,26 @@
-from typing import Dict, Any, Optional
-from sqlalchemy.orm import Session
 import logging
-import json
-from langchain_community.agent_toolkits import SQLDatabaseToolkit
-from langchain_community.utilities import SQLDatabase
-from langchain.tools import Tool
-from app.agents.base_agent import BaseAgent, VisualizationResult, AgentResponse
-from app.database.connection import get_company_isolated_sql_database
-from app.visualizations.visualization_agent import VisualizationAgent as LangGraphVisualizationAgent
-from app.core.llm import get_llm
-from app.core.token_manager import TokenManager
+from typing import Dict, Any, Optional, List
+from sqlalchemy.orm import Session
+import uuid
 
+from app.agents.base_agent import BaseAgent, AgentResponse, VisualizationResult
+from app.core.token_manager import TokenManager
+from app.visualizations.langgraph.visualization_agent import VisualizationLangGraphAgent
+from app.visualizations.langgraph.workflow import WorkflowManager
+
+# Set up logging
 logger = logging.getLogger(__name__)
 
-class VisualizationAgent(BaseAgent):
-    """Agent dedicated to generating visualizations from natural language or SQL queries, with company isolation."""
-
+class VisualizationLangGraphFacade(BaseAgent):
+    """Facade for the LangGraph visualization agent, implementing the BaseAgent interface."""
+    
     def __init__(self):
+        """Initialize the visualization agent facade."""
         super().__init__()
         self.type = "visualization"
-        self.llm = get_llm()
-        self.langgraph_visualization_agent = LangGraphVisualizationAgent()
-
+        self.visualization_agent = VisualizationLangGraphAgent()
+        self.workflow_manager = WorkflowManager(self.visualization_agent.company_id)
+    
     async def generate_visualization(
         self,
         query: str,
@@ -31,58 +30,72 @@ class VisualizationAgent(BaseAgent):
         session: Optional[Session] = None,
         conversation_id: Optional[str] = None
     ) -> AgentResponse:
-        """Generate a visualization from a natural language or SQL query, enforcing company isolation, and return AgentResponse for multimodal chat."""
+        """Generate a visualization from a natural language query using LangGraph workflow."""
         try:
             logger.info(f"Generating visualization for '{query}', company_id={company_id}, visualization_type={visualization_type}")
             
-            # Use the LangGraph visualization agent
-            viz_result = self.langgraph_visualization_agent.generate_visualization(
+            # Set the company_id in the visualization agent
+            self.visualization_agent.company_id = company_id
+            
+            # Re-initialize the workflow manager with the company ID
+            self.workflow_manager = WorkflowManager(company_id)
+            
+            # Run the visualization workflow
+            result = self.visualization_agent.generate_visualization(
                 query=query,
-                company_id=company_id,
-                requested_chart_type=visualization_type
+                company_id=company_id
             )
             
-            # Log the visualization data
-            if viz_result.get("chart_data"):
-                logger.info(f"Generated visualization with chart_type={viz_result.get('chart_data', {}).get('chart_type')}")
-            else:
-                logger.warning("No visualization data was generated")
+            # Extract results
+            chart_data = result.get('chart_data')
+            explanation = result.get('answer', "Here is the visualization you requested.")
+            tokens_used = result.get('tokens_used', 0)
+            
+            # Use fixed tokens (2) as agreed for visualizations
+            actual_tokens_used = 2
             
             # Update token usage if session is provided
             tokens_remaining = None
             if session:
-                # Use fixed tokens (2) as agreed for visualizations
-                tokens_used = 2
                 try:
-                    # Direct token update using engine
-                    from app.database.connection import DatabaseConnection
+                    # Update token usage directly using SQL
                     from sqlalchemy import text
-                    engine = DatabaseConnection.create_engine()
-                    with Session(engine) as db_session:
-                        stmt_update = text("UPDATE users SET ai_agent_tokens_used = ai_agent_tokens_used + :tokens WHERE id = :company_id")
-                        db_session.execute(stmt_update, {"tokens": tokens_used, "company_id": company_id})
-                        db_session.commit()
-                        stmt_get = text("SELECT p.ai_agent_default_tokens - u.ai_agent_tokens_used FROM users u JOIN plans p ON u.plan = p.id WHERE u.id = :company_id")
-                        result = db_session.execute(stmt_get, {"company_id": company_id}).fetchone()
-                        tokens_remaining = result[0] if result else None
+                    update_query = text("""
+                        UPDATE users
+                        SET ai_agent_tokens_used = ai_agent_tokens_used + :tokens_to_consume
+                        WHERE id = :company_id AND type = 'company'
+                    """)
+                    session.execute(update_query, {"company_id": company_id, "tokens_to_consume": actual_tokens_used})
+                    session.commit()
+                    
+                    # Get remaining tokens
+                    tokens_remaining = await TokenManager.get_token_count(company_id, session)
                     logger.info(f"Tokens updated for visualization. Remaining for company {company_id}: {tokens_remaining}")
                 except Exception as e:
-                    logger.error(f"Failed to update token usage for company {company_id}: {e}")
+                    logger.error(f"Failed to update token usage for company {company_id}: {str(e)}")
                     # Try to get current count anyway
                     tokens_remaining = await TokenManager.get_token_count(company_id, session)
             
             # Create the response with the visualization data
+            # Check if we have valid chart data - if not, explain the issue to the user
+            if chart_data is None:
+                explanation = "I couldn't generate a visualization for your query. Please try again with a different question or more specific details about what you want to see."
+            
+            logger.info(f"Creating visualization response with chart_data: {chart_data is not None}")
+            if chart_data and isinstance(chart_data, dict):
+                logger.info(f"Chart type: {chart_data.get('chart_type')}, Has datasets: {'datasets' in chart_data}")
+            
             agent_response = AgentResponse(
-                response=viz_result.get("explanation", "Here is the visualization you requested."),
-                conversation_id=conversation_id or "",  # Use provided conversation_id or default to empty
+                response=explanation,
+                conversation_id=conversation_id or str(uuid.uuid4()),
                 conversation_title=f"Visualization: {query[:30]}{'...' if len(query) > 30 else ''}",
-                visualization=viz_result.get("chart_data"),  # Set the visualization data explicitly
+                visualization=chart_data,
                 tokens_remaining=tokens_remaining,
-                tokens_used=viz_result.get("tokens_used", 2),
-                agent_type=self.type  # Explicitly set agent_type for frontend
+                tokens_used=actual_tokens_used,
+                agent_type=self.type
             )
             
-            # Log the complete response structure (excluding large data fields)
+            # Log the response structure
             visualization_log = "No visualization data" if agent_response.visualization is None else {
                 "chart_type": agent_response.visualization.get("chart_type", "unknown"),
                 "has_labels": "labels" in agent_response.visualization,
@@ -95,17 +108,17 @@ class VisualizationAgent(BaseAgent):
             return agent_response
             
         except Exception as e:
-            logger.error(f"VisualizationAgent error: {e}", exc_info=True)
+            logger.error(f"VisualizationLangGraphFacade error: {e}", exc_info=True)
             return AgentResponse(
                 response=f"Error generating visualization: {str(e)}",
-                conversation_id=conversation_id or "",
+                conversation_id=conversation_id or str(uuid.uuid4()),
                 conversation_title=None,
                 visualization=None,
                 tokens_remaining=None,
                 tokens_used=0,
-                agent_type=self.type  # Still set agent_type even on error
+                agent_type=self.type
             )
-
+    
     async def process_message(
         self,
         message: str,
@@ -115,7 +128,7 @@ class VisualizationAgent(BaseAgent):
         session: Optional[Session] = None
     ) -> AgentResponse:
         """Process a user message to generate a visualization."""
-        logger.info(f"VisualizationAgent processing message: '{message[:50]}...'")
+        logger.info(f"VisualizationLangGraphFacade processing message: '{message[:50]}...'")
         
         try:
             # Generate visualization
@@ -137,20 +150,20 @@ class VisualizationAgent(BaseAgent):
                     "has_labels": "labels" in response.visualization,
                     "has_datasets": "datasets" in response.visualization
                 }
-                logger.info(f"VisualizationAgent created response with visualization: {viz_info}")
+                logger.info(f"VisualizationLangGraphFacade created response with visualization: {viz_info}")
             else:
-                logger.warning("VisualizationAgent response is missing visualization data")
+                logger.warning("VisualizationLangGraphFacade response is missing visualization data")
                 
             return response
             
         except Exception as e:
-            logger.error(f"VisualizationAgent.process_message error: {e}", exc_info=True)
+            logger.error(f"VisualizationLangGraphFacade.process_message error: {e}", exc_info=True)
             return AgentResponse(
                 response=f"I encountered an error while creating the visualization: {str(e)}",
-                conversation_id=conversation_id or "",
+                conversation_id=conversation_id or str(uuid.uuid4()),
                 conversation_title=None,
                 visualization=None,
                 tokens_remaining=None,
                 tokens_used=0,
-                agent_type=self.type  # Always set agent_type even on error
-            ) 
+                agent_type=self.type
+            )

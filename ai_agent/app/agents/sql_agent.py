@@ -17,7 +17,7 @@ from langchain.tools import Tool
 from app.agents.base_agent import BaseAgent, AgentResponse, VisualizationResult, ActionResult
 from app.database.connection import DatabaseConnection, get_company_isolated_sql_database, get_company_isolation_column
 from app.core.llm import get_llm, get_embedding_model
-from app.visualizations.generator import generate_visualization_from_data
+from app.visualizations.visualization_agent import VisualizationAgent
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain.agents import AgentExecutor
 from langchain.agents.format_scratchpad import format_to_openai_function_messages
@@ -425,13 +425,26 @@ TECHNICAL RULES:
                             # Determine visualization type
                             viz_keywords, requested_type = self._check_visualization_intent(message)
                             
-                            # Generate Chart.js compatible data
-                            viz_result: VisualizationResult = await generate_visualization_from_data(
-                                data=raw_viz_data, 
+                            # Create VisualizationAgent instance if not already created
+                            if 'viz_agent' not in locals():
+                                viz_agent = VisualizationAgent()
+                                
+                            # Generate visualization from the data
+                            viz_result_dict = viz_agent.generate_visualization(
                                 query=message, 
-                                visualization_type=requested_type,
-                                llm=self.llm 
+                                company_id=company_id,
+                                requested_chart_type=requested_type
                             )
+                            
+                            # Convert to VisualizationResult format
+                            viz_result = VisualizationResult(
+                                data=viz_result_dict.get("chart_data"),
+                                explanation=viz_result_dict.get("explanation", "Here is the visualization you requested."),
+                                tokens_used=viz_result_dict.get("tokens_used", 2),
+                                chart_type=requested_type,
+                                query=message
+                            )
+                            
                             visualization_chart_data = viz_result.data
                             # Fixed token usage for visualization as requested - always use 2 tokens for visualizations
                             visualization_tokens_used = 2
@@ -487,12 +500,24 @@ TECHNICAL RULES:
                                 # Use the results as is
                                 raw_viz_data = result_rows
                                 
+                            # Create VisualizationAgent instance if not already created
+                            if 'viz_agent' not in locals():
+                                viz_agent = VisualizationAgent()
+                                
                             # Generate visualization from the data
-                            viz_result: VisualizationResult = await generate_visualization_from_data(
-                                data=raw_viz_data, 
+                            viz_result_dict = viz_agent.generate_visualization(
                                 query=message, 
-                                visualization_type=viz_type,
-                                llm=self.llm 
+                                company_id=company_id,
+                                requested_chart_type=viz_type
+                            )
+                            
+                            # Convert to VisualizationResult format
+                            viz_result = VisualizationResult(
+                                data=viz_result_dict.get("chart_data"),
+                                explanation=viz_result_dict.get("explanation", "Here is the visualization you requested."),
+                                tokens_used=viz_result_dict.get("tokens_used", 2),
+                                chart_type=viz_type,
+                                query=message
                             )
                             
                             visualization_chart_data = viz_result.data
@@ -676,6 +701,9 @@ TECHNICAL RULES:
         logger.info(f"[SQLAgent.generate_visualization] Called with query: '{query[:60]}...', ConvID: {current_conversation_id}")
 
         try:
+            # Create an instance of the VisualizationAgent
+            visualization_agent = VisualizationAgent()
+            
             # When a visualization request is passed from another agent like ProductAgent
             # Determine if this is a product-specific visualization request
             is_product_request = False
@@ -736,12 +764,20 @@ Be concise and informative."""
                         summary_response_message = await self.llm.ainvoke(summary_prompt)
                         textual_summary = summary_response_message.content.strip()
                         
-                        # Generate visualization
-                        viz_result_obj = await generate_visualization_from_data(
-                            data=data_for_viz, 
+                        # Directly use the query to visualize with the new visualization agent
+                        viz_result = visualization_agent.generate_visualization(
                             query=query, 
-                            visualization_type=visualization_type, 
-                            llm=self.llm
+                            company_id=company_id,
+                            requested_chart_type=visualization_type
+                        )
+                        
+                        # Extract the chart data and explanation from the result
+                        viz_result_obj = VisualizationResult(
+                            data=viz_result.get("chart_data"),
+                            explanation=viz_result.get("explanation", "Here is the visualization you requested."),
+                            tokens_used=viz_result.get("tokens_used", 2),
+                            chart_type=visualization_type,
+                            query=query
                         )
                         
                         # Finalize response - reuse existing logic below
@@ -827,9 +863,21 @@ Do not mention the SQL query or database structure. Be concise. """
                 logger.error(f"[SQLAgent.generate_visualization] Error generating textual summary: {summary_err}", exc_info=True)
                 textual_summary = "Here's a visualization of the data."  # Simple fallback
 
-            # Step 2: Generate visualization object from data_for_viz
-            viz_result_obj = await generate_visualization_from_data(
-                data=data_for_viz, query=query, visualization_type=visualization_type, llm=self.llm
+            # Step 2: Generate visualization using the new VisualizationAgent
+            if not 'viz_result_obj' in locals():
+                viz_result = visualization_agent.generate_visualization(
+                    query=query,
+                    company_id=company_id,
+                    requested_chart_type=visualization_type
+                )
+                
+                # Convert to VisualizationResult format
+                viz_result_obj = VisualizationResult(
+                    data=viz_result.get("chart_data"),
+                    explanation=viz_result.get("explanation", "Here is the visualization you requested."),
+                    tokens_used=viz_result.get("tokens_used", 2),
+                    chart_type=visualization_type,
+                    query=query
             )
             
             tokens_used = 2 # For viz generation + 1 for summary (adjust if summary LLM call is tokenized separately and more accurately)

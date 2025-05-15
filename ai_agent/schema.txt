@@ -1,0 +1,6260 @@
+-- phpMyAdmin SQL Dump
+-- version 5.2.1
+-- https://www.phpmyadmin.net/
+--
+-- Host: localhost
+-- Generation Time: May 14, 2025 at 02:18 AM
+-- Server version: 10.4.28-MariaDB
+-- PHP Version: 8.2.4
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+--
+-- Database: `agency_soul_saas`
+--
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `activity_logs`
+--
+
+CREATE TABLE `activity_logs` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` int(11) NOT NULL DEFAULT 0,
+  `project_id` int(11) NOT NULL DEFAULT 0,
+  `task_id` int(11) NOT NULL DEFAULT 0,
+  `deal_id` int(11) NOT NULL DEFAULT 0,
+  `log_type` varchar(191) NOT NULL,
+  `remark` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `admin_payment_settings`
+--
+
+CREATE TABLE `admin_payment_settings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `value` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `agent_conversations`
+--
+
+CREATE TABLE `agent_conversations` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `conversation_id` char(36) NOT NULL,
+  `title` varchar(191) DEFAULT NULL COMMENT 'Title for the conversation history sidebar',
+  `company_user_id` bigint(20) UNSIGNED NOT NULL COMMENT 'User ID of the company (user with type=company)',
+  `user_id` bigint(20) UNSIGNED NOT NULL COMMENT 'User ID who sent the message',
+  `message` text NOT NULL,
+  `response` text NOT NULL,
+  `visualization` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'JSON data for visualizations (charts, graphs, etc.)' CHECK (json_valid(`visualization`)),
+  `agent_type` varchar(191) DEFAULT NULL COMMENT 'Type of agent that handled the request (HRM, Sales, etc.)',
+  `tokens_used` int(11) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `allowances`
+--
+
+CREATE TABLE `allowances` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `allowance_option` int(11) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `type` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `allowance_options`
+--
+
+CREATE TABLE `allowance_options` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `announcements`
+--
+
+CREATE TABLE `announcements` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) DEFAULT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `branch_id` int(11) NOT NULL DEFAULT 0,
+  `department_id` varchar(191) NOT NULL DEFAULT '0',
+  `employee_id` varchar(191) NOT NULL DEFAULT '0',
+  `description` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `announcement_employees`
+--
+
+CREATE TABLE `announcement_employees` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `announcement_id` int(11) NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `appraisals`
+--
+
+CREATE TABLE `appraisals` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `branch` int(11) NOT NULL DEFAULT 0,
+  `employee` int(11) NOT NULL DEFAULT 0,
+  `rating` varchar(191) DEFAULT NULL,
+  `appraisal_date` varchar(191) DEFAULT NULL,
+  `customer_experience` int(11) NOT NULL DEFAULT 0,
+  `marketing` int(11) NOT NULL DEFAULT 0,
+  `administration` int(11) NOT NULL DEFAULT 0,
+  `professionalism` int(11) NOT NULL DEFAULT 0,
+  `integrity` int(11) NOT NULL DEFAULT 0,
+  `attendance` int(11) NOT NULL DEFAULT 0,
+  `remark` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `assets`
+--
+
+CREATE TABLE `assets` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` text DEFAULT NULL,
+  `name` varchar(191) NOT NULL,
+  `purchase_date` date NOT NULL,
+  `supported_date` date NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `description` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `attendance_employees`
+--
+
+CREATE TABLE `attendance_employees` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `status` varchar(191) NOT NULL,
+  `clock_in` time NOT NULL,
+  `clock_out` time NOT NULL,
+  `late` time NOT NULL,
+  `early_leaving` time NOT NULL,
+  `overtime` time NOT NULL,
+  `total_rest` time NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `awards`
+--
+
+CREATE TABLE `awards` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `award_type` varchar(191) DEFAULT NULL,
+  `date` date NOT NULL,
+  `gift` varchar(191) DEFAULT NULL,
+  `description` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `award_types`
+--
+
+CREATE TABLE `award_types` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bank_accounts`
+--
+
+CREATE TABLE `bank_accounts` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `holder_name` varchar(191) NOT NULL,
+  `bank_name` varchar(191) NOT NULL,
+  `account_number` varchar(191) NOT NULL,
+  `chart_account_id` int(11) NOT NULL DEFAULT 0,
+  `opening_balance` float NOT NULL DEFAULT 0,
+  `contact_number` varchar(191) NOT NULL,
+  `bank_address` text NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bank_transfers`
+--
+
+CREATE TABLE `bank_transfers` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `from_account` int(11) NOT NULL DEFAULT 0,
+  `to_account` int(11) NOT NULL DEFAULT 0,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `date` date NOT NULL,
+  `payment_method` int(11) NOT NULL DEFAULT 0,
+  `reference` varchar(191) DEFAULT NULL,
+  `description` text NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bills`
+--
+
+CREATE TABLE `bills` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `bill_id` varchar(191) NOT NULL DEFAULT '0',
+  `vender_id` int(11) NOT NULL,
+  `bill_date` date NOT NULL,
+  `due_date` date NOT NULL,
+  `order_number` int(11) NOT NULL DEFAULT 0,
+  `status` int(11) NOT NULL DEFAULT 0,
+  `type` varchar(191) DEFAULT NULL,
+  `user_type` varchar(191) DEFAULT NULL,
+  `shipping_display` int(11) NOT NULL DEFAULT 1,
+  `send_date` date DEFAULT NULL,
+  `discount_apply` int(11) NOT NULL DEFAULT 0,
+  `category_id` int(11) NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bill_accounts`
+--
+
+CREATE TABLE `bill_accounts` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `chart_account_id` int(11) NOT NULL DEFAULT 0,
+  `price` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `description` varchar(191) DEFAULT NULL,
+  `type` varchar(191) NOT NULL,
+  `ref_id` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bill_payments`
+--
+
+CREATE TABLE `bill_payments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `bill_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `amount` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `account_id` int(11) NOT NULL,
+  `payment_method` int(11) NOT NULL,
+  `reference` varchar(191) DEFAULT NULL,
+  `add_receipt` varchar(191) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bill_products`
+--
+
+CREATE TABLE `bill_products` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `bill_id` int(11) NOT NULL,
+  `product_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `tax` varchar(50) DEFAULT NULL,
+  `discount` double NOT NULL DEFAULT 0,
+  `price` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `branches`
+--
+
+CREATE TABLE `branches` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `budgets`
+--
+
+CREATE TABLE `budgets` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `period` varchar(191) NOT NULL,
+  `from` varchar(191) DEFAULT NULL,
+  `to` varchar(191) DEFAULT NULL,
+  `income_data` text DEFAULT NULL,
+  `expense_data` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bugs`
+--
+
+CREATE TABLE `bugs` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `bug_id` int(11) NOT NULL DEFAULT 0,
+  `project_id` int(11) NOT NULL DEFAULT 0,
+  `title` varchar(191) DEFAULT NULL,
+  `priority` varchar(191) DEFAULT NULL,
+  `start_date` date DEFAULT NULL,
+  `due_date` date DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `status` varchar(191) DEFAULT NULL,
+  `order` varchar(191) NOT NULL DEFAULT '0',
+  `assign_to` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bug_comments`
+--
+
+CREATE TABLE `bug_comments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `comment` text NOT NULL,
+  `bug_id` int(11) NOT NULL DEFAULT 0,
+  `user_type` varchar(100) NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bug_files`
+--
+
+CREATE TABLE `bug_files` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `file` varchar(191) NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `extension` varchar(191) NOT NULL,
+  `file_size` varchar(191) NOT NULL,
+  `bug_id` int(11) NOT NULL,
+  `user_type` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bug_statuses`
+--
+
+CREATE TABLE `bug_statuses` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `order` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `chart_of_accounts`
+--
+
+CREATE TABLE `chart_of_accounts` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `code` int(11) NOT NULL DEFAULT 0,
+  `type` int(11) NOT NULL DEFAULT 0,
+  `sub_type` int(11) NOT NULL DEFAULT 0,
+  `parent` int(11) NOT NULL DEFAULT 0,
+  `is_enabled` int(11) NOT NULL DEFAULT 1,
+  `description` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `chart_of_account_parents`
+--
+
+CREATE TABLE `chart_of_account_parents` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `sub_type` int(11) NOT NULL DEFAULT 0,
+  `type` int(11) NOT NULL DEFAULT 0,
+  `account` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `chart_of_account_sub_types`
+--
+
+CREATE TABLE `chart_of_account_sub_types` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL DEFAULT '1',
+  `type` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `chart_of_account_types`
+--
+
+CREATE TABLE `chart_of_account_types` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `ch_favorites`
+--
+
+CREATE TABLE `ch_favorites` (
+  `id` bigint(20) NOT NULL,
+  `user_id` bigint(20) NOT NULL,
+  `favorite_id` bigint(20) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `ch_messages`
+--
+
+CREATE TABLE `ch_messages` (
+  `id` bigint(20) NOT NULL,
+  `type` varchar(191) NOT NULL,
+  `from_id` bigint(20) NOT NULL,
+  `to_id` bigint(20) NOT NULL,
+  `body` varchar(5000) DEFAULT NULL,
+  `attachment` varchar(191) DEFAULT NULL,
+  `seen` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `client_deals`
+--
+
+CREATE TABLE `client_deals` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `client_id` bigint(20) UNSIGNED NOT NULL,
+  `deal_id` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `commissions`
+--
+
+CREATE TABLE `commissions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `type` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `company_payment_settings`
+--
+
+CREATE TABLE `company_payment_settings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `value` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `company_policies`
+--
+
+CREATE TABLE `company_policies` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `branch` int(11) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `description` text NOT NULL,
+  `attachment` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `competencies`
+--
+
+CREATE TABLE `competencies` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `type` varchar(191) NOT NULL,
+  `created_by` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `complaints`
+--
+
+CREATE TABLE `complaints` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `complaint_from` int(11) NOT NULL,
+  `complaint_against` int(11) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `complaint_date` date NOT NULL,
+  `description` varchar(191) DEFAULT NULL,
+  `created_by` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `contracts`
+--
+
+CREATE TABLE `contracts` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `client_name` int(11) NOT NULL,
+  `subject` varchar(191) DEFAULT NULL,
+  `value` varchar(191) DEFAULT NULL,
+  `type` int(11) NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `description` varchar(191) DEFAULT NULL,
+  `project_id` varchar(191) DEFAULT NULL,
+  `contract_description` text DEFAULT NULL,
+  `status` varchar(191) NOT NULL DEFAULT 'pending',
+  `client_signature` longtext DEFAULT NULL,
+  `company_signature` longtext DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `contract_attachment`
+--
+
+CREATE TABLE `contract_attachment` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `contract_id` int(11) NOT NULL DEFAULT 0,
+  `user_id` int(11) NOT NULL DEFAULT 0,
+  `files` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `contract_comment`
+--
+
+CREATE TABLE `contract_comment` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `contract_id` int(11) NOT NULL DEFAULT 0,
+  `user_id` int(11) NOT NULL DEFAULT 0,
+  `comment` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `contract_notes`
+--
+
+CREATE TABLE `contract_notes` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `contract_id` int(11) NOT NULL DEFAULT 0,
+  `user_id` int(11) NOT NULL DEFAULT 0,
+  `notes` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `contract_types`
+--
+
+CREATE TABLE `contract_types` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `coupons`
+--
+
+CREATE TABLE `coupons` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `code` varchar(191) NOT NULL,
+  `discount` double NOT NULL DEFAULT 0,
+  `limit` int(11) NOT NULL DEFAULT 0,
+  `description` text DEFAULT NULL,
+  `is_active` int(11) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `credit_notes`
+--
+
+CREATE TABLE `credit_notes` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `invoice` int(11) NOT NULL DEFAULT 0,
+  `customer` int(11) NOT NULL DEFAULT 0,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `date` date NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `customers`
+--
+
+CREATE TABLE `customers` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `customer_id` int(11) NOT NULL,
+  `name` varchar(191) DEFAULT NULL,
+  `email` varchar(191) DEFAULT NULL,
+  `tax_number` varchar(191) DEFAULT NULL,
+  `contact` varchar(191) DEFAULT NULL,
+  `avatar` varchar(100) NOT NULL DEFAULT '',
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `is_active` int(11) NOT NULL DEFAULT 1,
+  `email_verified_at` timestamp NULL DEFAULT NULL,
+  `billing_name` varchar(191) DEFAULT NULL,
+  `billing_country` varchar(191) DEFAULT NULL,
+  `billing_state` varchar(191) DEFAULT NULL,
+  `billing_city` varchar(191) DEFAULT NULL,
+  `billing_phone` varchar(191) DEFAULT NULL,
+  `billing_zip` varchar(191) DEFAULT NULL,
+  `billing_address` text DEFAULT NULL,
+  `shipping_name` varchar(191) DEFAULT NULL,
+  `shipping_country` varchar(191) DEFAULT NULL,
+  `shipping_state` varchar(191) DEFAULT NULL,
+  `shipping_city` varchar(191) DEFAULT NULL,
+  `shipping_phone` varchar(191) DEFAULT NULL,
+  `shipping_zip` varchar(191) DEFAULT NULL,
+  `shipping_address` text DEFAULT NULL,
+  `lang` varchar(191) NOT NULL DEFAULT 'en',
+  `balance` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `credit_balance` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `remember_token` varchar(100) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `custom_fields`
+--
+
+CREATE TABLE `custom_fields` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `type` varchar(191) NOT NULL,
+  `module` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `custom_field_values`
+--
+
+CREATE TABLE `custom_field_values` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `record_id` bigint(20) UNSIGNED NOT NULL,
+  `field_id` bigint(20) UNSIGNED NOT NULL,
+  `value` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `custom_questions`
+--
+
+CREATE TABLE `custom_questions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `question` varchar(191) NOT NULL,
+  `is_required` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `deals`
+--
+
+CREATE TABLE `deals` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `phone` varchar(191) DEFAULT NULL,
+  `price` decimal(15,2) DEFAULT 0.00,
+  `pipeline_id` int(11) NOT NULL,
+  `stage_id` int(11) NOT NULL,
+  `sources` varchar(191) DEFAULT NULL,
+  `products` varchar(191) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `labels` varchar(191) DEFAULT NULL,
+  `status` varchar(191) DEFAULT NULL,
+  `order` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL,
+  `is_active` int(11) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `deal_calls`
+--
+
+CREATE TABLE `deal_calls` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `deal_id` bigint(20) UNSIGNED NOT NULL,
+  `subject` varchar(191) NOT NULL,
+  `call_type` varchar(30) NOT NULL,
+  `duration` varchar(20) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `description` text DEFAULT NULL,
+  `call_result` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `deal_discussions`
+--
+
+CREATE TABLE `deal_discussions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `deal_id` bigint(20) UNSIGNED NOT NULL,
+  `comment` text NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `deal_emails`
+--
+
+CREATE TABLE `deal_emails` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `deal_id` bigint(20) UNSIGNED NOT NULL,
+  `to` varchar(191) NOT NULL,
+  `subject` varchar(191) NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `deal_files`
+--
+
+CREATE TABLE `deal_files` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `deal_id` bigint(20) UNSIGNED NOT NULL,
+  `file_name` varchar(191) NOT NULL,
+  `file_path` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `deal_tasks`
+--
+
+CREATE TABLE `deal_tasks` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `deal_id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `date` date NOT NULL,
+  `time` time NOT NULL,
+  `priority` varchar(191) NOT NULL,
+  `status` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `debit_notes`
+--
+
+CREATE TABLE `debit_notes` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `bill` int(11) NOT NULL DEFAULT 0,
+  `vendor` int(11) NOT NULL DEFAULT 0,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `date` date NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `deduction_options`
+--
+
+CREATE TABLE `deduction_options` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `departments`
+--
+
+CREATE TABLE `departments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `branch_id` int(11) NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `designations`
+--
+
+CREATE TABLE `designations` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `branch_id` int(11) DEFAULT NULL,
+  `department_id` int(11) NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `documents`
+--
+
+CREATE TABLE `documents` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `is_required` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `ducument_uploads`
+--
+
+CREATE TABLE `ducument_uploads` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `role` varchar(191) NOT NULL,
+  `document` varchar(191) NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `email_templates`
+--
+
+CREATE TABLE `email_templates` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `from` varchar(191) DEFAULT NULL,
+  `slug` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `email_template_langs`
+--
+
+CREATE TABLE `email_template_langs` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `parent_id` int(11) NOT NULL,
+  `lang` varchar(100) NOT NULL,
+  `subject` varchar(191) NOT NULL,
+  `content` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `employees`
+--
+
+CREATE TABLE `employees` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` int(11) NOT NULL DEFAULT 0,
+  `name` varchar(191) DEFAULT NULL,
+  `dob` date DEFAULT NULL,
+  `gender` varchar(191) DEFAULT NULL,
+  `phone` varchar(191) DEFAULT NULL,
+  `address` varchar(191) DEFAULT NULL,
+  `email` varchar(191) DEFAULT NULL,
+  `password` varchar(191) DEFAULT NULL,
+  `employee_id` varchar(191) NOT NULL DEFAULT '0',
+  `biometric_emp_id` int(11) DEFAULT NULL,
+  `branch_id` int(11) NOT NULL DEFAULT 0,
+  `department_id` int(11) NOT NULL DEFAULT 0,
+  `designation_id` int(11) NOT NULL DEFAULT 0,
+  `company_doj` varchar(191) DEFAULT NULL,
+  `documents` varchar(191) DEFAULT NULL,
+  `account_holder_name` varchar(191) DEFAULT NULL,
+  `account_number` varchar(191) DEFAULT NULL,
+  `bank_name` varchar(191) DEFAULT NULL,
+  `bank_identifier_code` varchar(191) DEFAULT NULL,
+  `branch_location` varchar(191) DEFAULT NULL,
+  `tax_payer_id` varchar(191) DEFAULT NULL,
+  `account` int(11) DEFAULT NULL,
+  `salary_type` int(11) DEFAULT NULL,
+  `salary` int(11) DEFAULT NULL,
+  `is_active` int(11) NOT NULL DEFAULT 1,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `employee_documents`
+--
+
+CREATE TABLE `employee_documents` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `document_id` int(11) NOT NULL,
+  `document_value` varchar(191) NOT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `estimations`
+--
+
+CREATE TABLE `estimations` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `estimation_id` bigint(20) UNSIGNED NOT NULL,
+  `client_id` bigint(20) UNSIGNED NOT NULL,
+  `status` varchar(191) NOT NULL,
+  `issue_date` date NOT NULL,
+  `discount` double NOT NULL,
+  `tax_id` bigint(20) UNSIGNED NOT NULL,
+  `terms` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `events`
+--
+
+CREATE TABLE `events` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `branch_id` int(11) NOT NULL,
+  `department_id` longtext NOT NULL,
+  `employee_id` longtext NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `color` varchar(191) NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `event_employees`
+--
+
+CREATE TABLE `event_employees` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `event_id` int(11) NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `expenses`
+--
+
+CREATE TABLE `expenses` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `date` date DEFAULT NULL,
+  `description` varchar(191) DEFAULT NULL,
+  `amount` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `attachment` varchar(191) DEFAULT NULL,
+  `project_id` int(11) NOT NULL DEFAULT 0,
+  `task_id` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `experience_certificates`
+--
+
+CREATE TABLE `experience_certificates` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `lang` varchar(255) NOT NULL,
+  `content` longtext NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `failed_jobs`
+--
+
+CREATE TABLE `failed_jobs` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `connection` text NOT NULL,
+  `queue` text NOT NULL,
+  `payload` longtext NOT NULL,
+  `exception` longtext NOT NULL,
+  `failed_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `form_builders`
+--
+
+CREATE TABLE `form_builders` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `code` varchar(191) NOT NULL,
+  `is_active` int(11) NOT NULL DEFAULT 1,
+  `is_lead_active` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `form_fields`
+--
+
+CREATE TABLE `form_fields` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `form_id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `type` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `form_field_responses`
+--
+
+CREATE TABLE `form_field_responses` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `form_id` bigint(20) UNSIGNED NOT NULL,
+  `subject_id` int(11) NOT NULL,
+  `name_id` int(11) NOT NULL,
+  `email_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `pipeline_id` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `form_responses`
+--
+
+CREATE TABLE `form_responses` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `form_id` bigint(20) UNSIGNED NOT NULL,
+  `response` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `generate_offer_letters`
+--
+
+CREATE TABLE `generate_offer_letters` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `lang` varchar(100) NOT NULL,
+  `content` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `genrate_payslip_options`
+--
+
+CREATE TABLE `genrate_payslip_options` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `goals`
+--
+
+CREATE TABLE `goals` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `type` varchar(191) NOT NULL,
+  `from` varchar(191) DEFAULT NULL,
+  `to` varchar(191) DEFAULT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `is_display` int(11) NOT NULL DEFAULT 1,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `goal_trackings`
+--
+
+CREATE TABLE `goal_trackings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `branch` int(11) NOT NULL,
+  `goal_type` int(11) NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `subject` varchar(191) DEFAULT NULL,
+  `rating` varchar(191) DEFAULT NULL,
+  `target_achievement` varchar(191) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `status` int(11) NOT NULL DEFAULT 0,
+  `progress` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `goal_types`
+--
+
+CREATE TABLE `goal_types` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `holidays`
+--
+
+CREATE TABLE `holidays` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `occasion` text NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `indicators`
+--
+
+CREATE TABLE `indicators` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `branch` int(11) NOT NULL DEFAULT 0,
+  `department` int(11) NOT NULL DEFAULT 0,
+  `designation` int(11) NOT NULL DEFAULT 0,
+  `rating` varchar(191) DEFAULT NULL,
+  `customer_experience` int(11) NOT NULL DEFAULT 0,
+  `marketing` int(11) NOT NULL DEFAULT 0,
+  `administration` int(11) NOT NULL DEFAULT 0,
+  `professionalism` int(11) NOT NULL DEFAULT 0,
+  `integrity` int(11) NOT NULL DEFAULT 0,
+  `attendance` int(11) NOT NULL DEFAULT 0,
+  `created_user` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `interview_schedules`
+--
+
+CREATE TABLE `interview_schedules` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `candidate` int(11) NOT NULL,
+  `employee` int(11) NOT NULL DEFAULT 0,
+  `date` date NOT NULL,
+  `time` time NOT NULL,
+  `comment` text DEFAULT NULL,
+  `employee_response` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `invoices`
+--
+
+CREATE TABLE `invoices` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `invoice_id` bigint(20) UNSIGNED NOT NULL,
+  `customer_id` bigint(20) UNSIGNED NOT NULL,
+  `issue_date` date NOT NULL,
+  `due_date` date NOT NULL,
+  `send_date` date DEFAULT NULL,
+  `category_id` int(11) NOT NULL,
+  `ref_number` text DEFAULT NULL,
+  `status` int(11) NOT NULL DEFAULT 0,
+  `shipping_display` int(11) NOT NULL DEFAULT 1,
+  `discount_apply` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `invoice_bank_transfers`
+--
+
+CREATE TABLE `invoice_bank_transfers` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `invoice_id` int(11) NOT NULL,
+  `order_id` int(11) NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `status` varchar(191) DEFAULT NULL,
+  `date` date DEFAULT NULL,
+  `receipt` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `invoice_payments`
+--
+
+CREATE TABLE `invoice_payments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `invoice_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `amount` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `account_id` int(11) NOT NULL DEFAULT 0,
+  `payment_method` int(11) NOT NULL DEFAULT 0,
+  `order_id` varchar(191) DEFAULT NULL,
+  `currency` varchar(191) DEFAULT NULL,
+  `txn_id` varchar(191) DEFAULT NULL,
+  `payment_type` varchar(191) NOT NULL DEFAULT 'Manually',
+  `receipt` varchar(191) DEFAULT NULL,
+  `add_receipt` varchar(191) DEFAULT NULL,
+  `reference` varchar(191) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `invoice_products`
+--
+
+CREATE TABLE `invoice_products` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `invoice_id` int(11) NOT NULL,
+  `product_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `tax` varchar(50) DEFAULT NULL,
+  `discount` double NOT NULL DEFAULT 0,
+  `price` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `ip_restricts`
+--
+
+CREATE TABLE `ip_restricts` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `ip` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `jobs`
+--
+
+CREATE TABLE `jobs` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `description` text DEFAULT NULL,
+  `requirement` text DEFAULT NULL,
+  `branch` int(11) NOT NULL DEFAULT 0,
+  `category` int(11) NOT NULL DEFAULT 0,
+  `skill` text DEFAULT NULL,
+  `position` int(11) DEFAULT NULL,
+  `start_date` date DEFAULT NULL,
+  `end_date` date DEFAULT NULL,
+  `status` varchar(191) DEFAULT NULL,
+  `applicant` varchar(191) DEFAULT NULL,
+  `visibility` varchar(191) DEFAULT NULL,
+  `code` varchar(191) DEFAULT NULL,
+  `custom_question` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `job_applications`
+--
+
+CREATE TABLE `job_applications` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `job` int(11) NOT NULL,
+  `name` varchar(191) DEFAULT NULL,
+  `email` varchar(191) DEFAULT NULL,
+  `phone` varchar(191) DEFAULT NULL,
+  `profile` varchar(191) DEFAULT NULL,
+  `resume` varchar(191) DEFAULT NULL,
+  `cover_letter` text DEFAULT NULL,
+  `dob` date DEFAULT NULL,
+  `gender` varchar(191) DEFAULT NULL,
+  `country` varchar(191) DEFAULT NULL,
+  `state` varchar(191) DEFAULT NULL,
+  `city` varchar(191) DEFAULT NULL,
+  `stage` int(11) NOT NULL DEFAULT 1,
+  `order` int(11) NOT NULL DEFAULT 0,
+  `skill` text DEFAULT NULL,
+  `rating` int(11) NOT NULL DEFAULT 0,
+  `is_archive` int(11) NOT NULL DEFAULT 0,
+  `custom_question` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `job_application_notes`
+--
+
+CREATE TABLE `job_application_notes` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `application_id` int(11) NOT NULL DEFAULT 0,
+  `note_created` int(11) NOT NULL DEFAULT 0,
+  `note` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `job_categories`
+--
+
+CREATE TABLE `job_categories` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `job_on_boards`
+--
+
+CREATE TABLE `job_on_boards` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `application` int(11) NOT NULL,
+  `joining_date` date DEFAULT NULL,
+  `status` varchar(191) DEFAULT NULL,
+  `convert_to_employee` int(11) NOT NULL DEFAULT 0,
+  `job_type` varchar(191) DEFAULT NULL,
+  `days_of_week` int(11) DEFAULT NULL,
+  `salary` int(11) DEFAULT NULL,
+  `salary_type` varchar(191) DEFAULT NULL,
+  `salary_duration` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `job_stages`
+--
+
+CREATE TABLE `job_stages` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `order` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `joining_letters`
+--
+
+CREATE TABLE `joining_letters` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `lang` varchar(100) NOT NULL,
+  `content` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `join_us`
+--
+
+CREATE TABLE `join_us` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `email` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `journal_entries`
+--
+
+CREATE TABLE `journal_entries` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `date` date NOT NULL,
+  `reference` varchar(191) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `journal_id` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `journal_items`
+--
+
+CREATE TABLE `journal_items` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `journal` int(11) NOT NULL DEFAULT 0,
+  `account` int(11) NOT NULL DEFAULT 0,
+  `description` text DEFAULT NULL,
+  `debit` float NOT NULL DEFAULT 0,
+  `credit` float NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `labels`
+--
+
+CREATE TABLE `labels` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `color` varchar(191) NOT NULL,
+  `pipeline_id` int(11) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `landing_page_settings`
+--
+
+CREATE TABLE `landing_page_settings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `value` longtext DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `languages`
+--
+
+CREATE TABLE `languages` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `code` varchar(191) DEFAULT NULL,
+  `full_name` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `leads`
+--
+
+CREATE TABLE `leads` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `email` varchar(191) NOT NULL,
+  `phone` varchar(191) DEFAULT NULL,
+  `subject` varchar(191) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `pipeline_id` int(11) NOT NULL,
+  `stage_id` int(11) NOT NULL,
+  `sources` varchar(191) DEFAULT NULL,
+  `products` varchar(191) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `labels` varchar(191) DEFAULT NULL,
+  `order` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL,
+  `is_active` int(11) NOT NULL DEFAULT 1,
+  `is_converted` int(11) NOT NULL DEFAULT 0,
+  `date` date DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `lead_activity_logs`
+--
+
+CREATE TABLE `lead_activity_logs` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `lead_id` bigint(20) UNSIGNED NOT NULL,
+  `log_type` varchar(191) NOT NULL,
+  `remark` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `lead_calls`
+--
+
+CREATE TABLE `lead_calls` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `lead_id` bigint(20) UNSIGNED NOT NULL,
+  `subject` varchar(191) NOT NULL,
+  `call_type` varchar(30) NOT NULL,
+  `duration` varchar(20) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `description` text DEFAULT NULL,
+  `call_result` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `lead_discussions`
+--
+
+CREATE TABLE `lead_discussions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `lead_id` bigint(20) UNSIGNED NOT NULL,
+  `comment` text NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `lead_emails`
+--
+
+CREATE TABLE `lead_emails` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `lead_id` bigint(20) UNSIGNED NOT NULL,
+  `to` varchar(191) NOT NULL,
+  `subject` varchar(191) NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `lead_files`
+--
+
+CREATE TABLE `lead_files` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `lead_id` bigint(20) UNSIGNED NOT NULL,
+  `file_name` varchar(191) NOT NULL,
+  `file_path` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `lead_stages`
+--
+
+CREATE TABLE `lead_stages` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `pipeline_id` int(11) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `order` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `leaves`
+--
+
+CREATE TABLE `leaves` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `leave_type_id` int(11) NOT NULL,
+  `applied_on` date NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `total_leave_days` varchar(191) NOT NULL,
+  `leave_reason` varchar(191) NOT NULL,
+  `remark` varchar(191) DEFAULT NULL,
+  `status` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `leave_types`
+--
+
+CREATE TABLE `leave_types` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `days` int(11) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `loans`
+--
+
+CREATE TABLE `loans` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `loan_option` int(11) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `type` varchar(191) DEFAULT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `reason` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `loan_options`
+--
+
+CREATE TABLE `loan_options` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `login_details`
+--
+
+CREATE TABLE `login_details` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` varchar(191) NOT NULL,
+  `ip` varchar(191) NOT NULL,
+  `date` varchar(191) NOT NULL,
+  `Details` text NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `log_activities`
+--
+
+CREATE TABLE `log_activities` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `type` varchar(191) NOT NULL,
+  `start_date` date NOT NULL,
+  `time` time NOT NULL,
+  `note` text NOT NULL,
+  `module_type` varchar(191) NOT NULL,
+  `module_id` bigint(20) UNSIGNED NOT NULL,
+  `created_by` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `meetings`
+--
+
+CREATE TABLE `meetings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `branch_id` int(11) NOT NULL,
+  `department_id` longtext NOT NULL,
+  `employee_id` longtext NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `date` date NOT NULL,
+  `time` time NOT NULL,
+  `note` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `meeting_employees`
+--
+
+CREATE TABLE `meeting_employees` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `meeting_id` int(11) NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `migrations`
+--
+
+CREATE TABLE `migrations` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `migration` varchar(191) NOT NULL,
+  `batch` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `milestones`
+--
+
+CREATE TABLE `milestones` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `project_id` int(11) NOT NULL DEFAULT 0,
+  `title` varchar(191) NOT NULL,
+  `status` varchar(191) NOT NULL,
+  `progress` varchar(191) DEFAULT NULL,
+  `cost` double NOT NULL DEFAULT 0,
+  `start_date` date DEFAULT NULL,
+  `due_date` date DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `model_has_permissions`
+--
+
+CREATE TABLE `model_has_permissions` (
+  `permission_id` bigint(20) UNSIGNED NOT NULL,
+  `model_type` varchar(191) NOT NULL,
+  `model_id` bigint(20) UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `model_has_roles`
+--
+
+CREATE TABLE `model_has_roles` (
+  `role_id` bigint(20) UNSIGNED NOT NULL,
+  `model_type` varchar(191) NOT NULL,
+  `model_id` bigint(20) UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `noc_certificates`
+--
+
+CREATE TABLE `noc_certificates` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `lang` varchar(255) NOT NULL,
+  `content` longtext NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `notifications`
+--
+
+CREATE TABLE `notifications` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) NOT NULL,
+  `type` text NOT NULL,
+  `data` text NOT NULL,
+  `is_read` tinyint(4) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `notification_templates`
+--
+
+CREATE TABLE `notification_templates` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `slug` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `notification_template_langs`
+--
+
+CREATE TABLE `notification_template_langs` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `parent_id` int(11) NOT NULL,
+  `lang` varchar(100) NOT NULL,
+  `content` longtext NOT NULL,
+  `variables` longtext NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `orders`
+--
+
+CREATE TABLE `orders` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `order_id` varchar(100) NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  `email` varchar(100) DEFAULT NULL,
+  `card_number` varchar(10) DEFAULT NULL,
+  `card_exp_month` varchar(10) DEFAULT NULL,
+  `card_exp_year` varchar(10) DEFAULT NULL,
+  `plan_name` varchar(100) DEFAULT NULL,
+  `plan_id` int(11) NOT NULL,
+  `price` decimal(15,2) DEFAULT 0.00,
+  `price_currency` varchar(10) DEFAULT NULL,
+  `txn_id` varchar(100) DEFAULT NULL,
+  `payment_status` varchar(100) DEFAULT NULL,
+  `payment_type` varchar(191) NOT NULL DEFAULT 'Manually',
+  `receipt` varchar(191) DEFAULT NULL,
+  `user_id` int(11) NOT NULL DEFAULT 0,
+  `is_refund` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `other_payments`
+--
+
+CREATE TABLE `other_payments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `type` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `overtimes`
+--
+
+CREATE TABLE `overtimes` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `number_of_days` int(11) NOT NULL,
+  `hours` int(11) NOT NULL,
+  `rate` int(11) NOT NULL,
+  `type` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `password_resets`
+--
+
+CREATE TABLE `password_resets` (
+  `email` varchar(191) NOT NULL,
+  `token` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payments`
+--
+
+CREATE TABLE `payments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `date` date NOT NULL,
+  `amount` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `account_id` int(11) NOT NULL,
+  `chart_account_id` int(11) NOT NULL DEFAULT 0,
+  `vender_id` int(11) NOT NULL,
+  `description` text DEFAULT NULL,
+  `category_id` int(11) NOT NULL,
+  `recurring` varchar(191) DEFAULT NULL,
+  `payment_method` int(11) NOT NULL,
+  `reference` varchar(191) DEFAULT NULL,
+  `add_receipt` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payslip_types`
+--
+
+CREATE TABLE `payslip_types` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pay_slips`
+--
+
+CREATE TABLE `pay_slips` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `net_payble` int(11) NOT NULL,
+  `salary_month` varchar(191) NOT NULL,
+  `status` int(11) NOT NULL,
+  `basic_salary` int(11) NOT NULL,
+  `allowance` text NOT NULL,
+  `commission` text NOT NULL,
+  `loan` text NOT NULL,
+  `saturation_deduction` text NOT NULL,
+  `other_payment` text NOT NULL,
+  `overtime` text NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `performance_types`
+--
+
+CREATE TABLE `performance_types` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `permissions`
+--
+
+CREATE TABLE `permissions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `guard_name` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `personal_access_tokens`
+--
+
+CREATE TABLE `personal_access_tokens` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `tokenable_type` varchar(191) NOT NULL,
+  `tokenable_id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `token` varchar(64) NOT NULL,
+  `abilities` text DEFAULT NULL,
+  `last_used_at` timestamp NULL DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pipelines`
+--
+
+CREATE TABLE `pipelines` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `plans`
+--
+
+CREATE TABLE `plans` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `price` decimal(30,2) DEFAULT 0.00,
+  `duration` varchar(100) NOT NULL,
+  `max_users` int(11) NOT NULL DEFAULT 0,
+  `max_customers` int(11) NOT NULL DEFAULT 0,
+  `max_venders` int(11) NOT NULL DEFAULT 0,
+  `max_clients` int(11) NOT NULL DEFAULT 0,
+  `trial` int(11) NOT NULL DEFAULT 0,
+  `trial_days` int(11) DEFAULT NULL,
+  `ai_agent_enabled` tinyint(1) NOT NULL DEFAULT 0,
+  `ai_agent_default_tokens` int(11) NOT NULL DEFAULT 0 COMMENT 'Default number of AI agent tokens allocated to companies on this plan',
+  `is_disable` int(11) NOT NULL DEFAULT 1,
+  `storage_limit` double NOT NULL DEFAULT 0,
+  `chatgpt` int(11) NOT NULL DEFAULT 0,
+  `crm` int(11) NOT NULL DEFAULT 0,
+  `hrm` int(11) NOT NULL DEFAULT 0,
+  `account` int(11) NOT NULL DEFAULT 0,
+  `project` int(11) NOT NULL DEFAULT 0,
+  `pos` int(11) NOT NULL DEFAULT 0,
+  `description` text DEFAULT NULL,
+  `image` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `plan_requests`
+--
+
+CREATE TABLE `plan_requests` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `plan_id` int(11) NOT NULL,
+  `duration` varchar(20) NOT NULL DEFAULT 'monthly',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pos`
+--
+
+CREATE TABLE `pos` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `pos_id` bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  `customer_id` bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  `warehouse_id` int(11) NOT NULL DEFAULT 0,
+  `pos_date` date DEFAULT NULL,
+  `category_id` int(11) NOT NULL DEFAULT 0,
+  `status` int(11) NOT NULL DEFAULT 0,
+  `shipping_display` int(11) NOT NULL DEFAULT 1,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pos_payments`
+--
+
+CREATE TABLE `pos_payments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `pos_id` int(11) NOT NULL,
+  `date` date DEFAULT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `discount` decimal(15,2) DEFAULT 0.00,
+  `discount_amount` decimal(15,2) DEFAULT 0.00,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pos_products`
+--
+
+CREATE TABLE `pos_products` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `pos_id` int(11) NOT NULL DEFAULT 0,
+  `product_id` int(11) NOT NULL DEFAULT 0,
+  `quantity` int(11) NOT NULL DEFAULT 0,
+  `tax` varchar(191) NOT NULL DEFAULT '0.00',
+  `discount` double DEFAULT 0,
+  `price` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `product_services`
+--
+
+CREATE TABLE `product_services` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `sku` varchar(191) NOT NULL,
+  `sale_price` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `purchase_price` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `quantity` double NOT NULL DEFAULT 0,
+  `tax_id` varchar(50) DEFAULT NULL,
+  `category_id` int(11) NOT NULL DEFAULT 0,
+  `unit_id` int(11) NOT NULL DEFAULT 0,
+  `type` varchar(191) NOT NULL,
+  `sale_chartaccount_id` int(11) NOT NULL DEFAULT 0,
+  `expense_chartaccount_id` int(11) NOT NULL DEFAULT 0,
+  `description` text DEFAULT NULL,
+  `pro_image` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `product_service_categories`
+--
+
+CREATE TABLE `product_service_categories` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `type` varchar(191) NOT NULL DEFAULT '0',
+  `chart_account_id` int(11) NOT NULL DEFAULT 0,
+  `color` varchar(191) NOT NULL DEFAULT '#fc544b',
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `product_service_units`
+--
+
+CREATE TABLE `product_service_units` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `projects`
+--
+
+CREATE TABLE `projects` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `project_name` varchar(191) NOT NULL,
+  `start_date` date DEFAULT NULL,
+  `end_date` date DEFAULT NULL,
+  `project_image` varchar(191) DEFAULT NULL,
+  `budget` int(11) DEFAULT NULL,
+  `client_id` int(11) NOT NULL,
+  `description` text DEFAULT NULL,
+  `status` varchar(191) NOT NULL,
+  `estimated_hrs` varchar(191) DEFAULT NULL,
+  `password` varchar(191) DEFAULT NULL,
+  `copylinksetting` text DEFAULT NULL,
+  `tags` text DEFAULT NULL,
+  `created_by` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `projectstages`
+--
+
+CREATE TABLE `projectstages` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `color` varchar(15) DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `order` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_email_templates`
+--
+
+CREATE TABLE `project_email_templates` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `template_id` int(11) NOT NULL,
+  `project_id` int(11) NOT NULL,
+  `is_active` int(11) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_expenses`
+--
+
+CREATE TABLE `project_expenses` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `date` date NOT NULL,
+  `description` text DEFAULT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `attachment` text NOT NULL,
+  `project_id` int(11) NOT NULL,
+  `task_id` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_invoices`
+--
+
+CREATE TABLE `project_invoices` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `invoice_id` bigint(20) UNSIGNED NOT NULL,
+  `project_id` bigint(20) UNSIGNED NOT NULL,
+  `client_id` bigint(20) UNSIGNED NOT NULL,
+  `tax_id` bigint(20) UNSIGNED NOT NULL,
+  `due_date` date NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `status` smallint(6) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_tasks`
+--
+
+CREATE TABLE `project_tasks` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `description` text DEFAULT NULL,
+  `estimated_hrs` int(11) NOT NULL DEFAULT 0,
+  `start_date` date DEFAULT NULL,
+  `end_date` date DEFAULT NULL,
+  `priority` varchar(50) NOT NULL DEFAULT 'medium',
+  `priority_color` varchar(50) DEFAULT NULL,
+  `assign_to` text DEFAULT NULL,
+  `project_id` int(11) NOT NULL DEFAULT 0,
+  `milestone_id` int(11) NOT NULL DEFAULT 0,
+  `stage_id` int(11) NOT NULL DEFAULT 0,
+  `order` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `is_favourite` int(11) NOT NULL DEFAULT 0,
+  `is_complete` int(11) NOT NULL DEFAULT 0,
+  `marked_at` date DEFAULT NULL,
+  `progress` varchar(5) NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_users`
+--
+
+CREATE TABLE `project_users` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `project_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `invited_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `promotions`
+--
+
+CREATE TABLE `promotions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL DEFAULT 0,
+  `designation_id` int(11) NOT NULL DEFAULT 0,
+  `promotion_title` varchar(191) DEFAULT NULL,
+  `promotion_date` date NOT NULL,
+  `description` varchar(191) DEFAULT NULL,
+  `created_by` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `proposals`
+--
+
+CREATE TABLE `proposals` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `proposal_id` bigint(20) UNSIGNED NOT NULL,
+  `customer_id` bigint(20) UNSIGNED NOT NULL,
+  `issue_date` date NOT NULL,
+  `send_date` date DEFAULT NULL,
+  `category_id` int(11) NOT NULL,
+  `status` int(11) NOT NULL DEFAULT 0,
+  `discount_apply` int(11) NOT NULL DEFAULT 0,
+  `is_convert` int(11) NOT NULL DEFAULT 0,
+  `converted_invoice_id` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `proposal_products`
+--
+
+CREATE TABLE `proposal_products` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `proposal_id` int(11) NOT NULL,
+  `product_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `tax` varchar(50) DEFAULT NULL,
+  `discount` double NOT NULL DEFAULT 0,
+  `price` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `purchases`
+--
+
+CREATE TABLE `purchases` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `purchase_id` varchar(191) NOT NULL DEFAULT '0',
+  `vender_id` int(11) NOT NULL,
+  `warehouse_id` int(11) NOT NULL,
+  `purchase_date` date NOT NULL,
+  `purchase_number` int(11) NOT NULL DEFAULT 0,
+  `status` int(11) NOT NULL DEFAULT 0,
+  `shipping_display` int(11) NOT NULL DEFAULT 1,
+  `send_date` date DEFAULT NULL,
+  `discount_apply` int(11) NOT NULL DEFAULT 0,
+  `category_id` int(11) NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `purchase_payments`
+--
+
+CREATE TABLE `purchase_payments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `purchase_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `account_id` int(11) NOT NULL,
+  `payment_method` int(11) NOT NULL,
+  `reference` varchar(191) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `add_receipt` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `purchase_products`
+--
+
+CREATE TABLE `purchase_products` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `purchase_id` int(11) NOT NULL,
+  `product_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `tax` varchar(50) DEFAULT NULL,
+  `discount` double NOT NULL DEFAULT 0,
+  `price` decimal(15,2) DEFAULT 0.00,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `quotations`
+--
+
+CREATE TABLE `quotations` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `quotation_id` bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  `customer_id` bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  `warehouse_id` int(11) NOT NULL DEFAULT 0,
+  `quotation_date` date DEFAULT NULL,
+  `category_id` int(11) NOT NULL DEFAULT 0,
+  `status` int(11) NOT NULL DEFAULT 0,
+  `converted_pos_id` int(11) NOT NULL DEFAULT 0,
+  `is_converted` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `quotation_products`
+--
+
+CREATE TABLE `quotation_products` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `quotation_id` int(11) NOT NULL DEFAULT 0,
+  `product_id` int(11) NOT NULL DEFAULT 0,
+  `quantity` int(11) NOT NULL DEFAULT 0,
+  `tax` varchar(191) DEFAULT '0.00',
+  `discount` double DEFAULT 0,
+  `price` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `referral_settings`
+--
+
+CREATE TABLE `referral_settings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `percentage` int(11) NOT NULL,
+  `minimum_threshold_amount` int(11) NOT NULL,
+  `is_enable` int(11) NOT NULL DEFAULT 0,
+  `guideline` longtext NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `referral_transactions`
+--
+
+CREATE TABLE `referral_transactions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `company_id` int(11) NOT NULL,
+  `plan_id` int(11) NOT NULL,
+  `plan_price` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `commission` int(11) NOT NULL,
+  `referral_code` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `resignations`
+--
+
+CREATE TABLE `resignations` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL DEFAULT 0,
+  `notice_date` date NOT NULL,
+  `resignation_date` date NOT NULL,
+  `description` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `revenues`
+--
+
+CREATE TABLE `revenues` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `date` date NOT NULL,
+  `amount` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `account_id` int(11) NOT NULL,
+  `customer_id` int(11) NOT NULL,
+  `category_id` int(11) NOT NULL,
+  `payment_method` int(11) NOT NULL,
+  `reference` varchar(191) DEFAULT NULL,
+  `add_receipt` varchar(191) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `roles`
+--
+
+CREATE TABLE `roles` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `guard_name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `role_has_permissions`
+--
+
+CREATE TABLE `role_has_permissions` (
+  `permission_id` bigint(20) UNSIGNED NOT NULL,
+  `role_id` bigint(20) UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `saturation_deductions`
+--
+
+CREATE TABLE `saturation_deductions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `deduction_option` int(11) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `type` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `settings`
+--
+
+CREATE TABLE `settings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) DEFAULT NULL,
+  `value` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `set_salaries`
+--
+
+CREATE TABLE `set_salaries` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `sources`
+--
+
+CREATE TABLE `sources` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `stages`
+--
+
+CREATE TABLE `stages` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `pipeline_id` int(11) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `order` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `stock_reports`
+--
+
+CREATE TABLE `stock_reports` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `product_id` int(11) NOT NULL DEFAULT 0,
+  `quantity` int(11) NOT NULL DEFAULT 0,
+  `type` varchar(191) NOT NULL,
+  `type_id` int(11) NOT NULL DEFAULT 0,
+  `description` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `supports`
+--
+
+CREATE TABLE `supports` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `subject` varchar(191) NOT NULL,
+  `ticket_created` int(11) NOT NULL DEFAULT 0,
+  `user` int(11) NOT NULL DEFAULT 0,
+  `priority` varchar(191) NOT NULL,
+  `end_date` date NOT NULL,
+  `ticket_code` varchar(191) DEFAULT NULL,
+  `status` varchar(191) NOT NULL DEFAULT '0',
+  `attachment` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `support_replies`
+--
+
+CREATE TABLE `support_replies` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `support_id` int(11) NOT NULL,
+  `user` int(11) NOT NULL DEFAULT 0,
+  `description` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `is_read` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `task_checklists`
+--
+
+CREATE TABLE `task_checklists` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `task_id` int(11) NOT NULL,
+  `user_type` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `status` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `task_comments`
+--
+
+CREATE TABLE `task_comments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `comment` text NOT NULL,
+  `task_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `user_type` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `task_files`
+--
+
+CREATE TABLE `task_files` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `file` varchar(191) NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `extension` varchar(191) NOT NULL,
+  `file_size` varchar(191) NOT NULL,
+  `task_id` int(11) NOT NULL,
+  `user_type` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `task_stages`
+--
+
+CREATE TABLE `task_stages` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) DEFAULT NULL,
+  `complete` tinyint(1) NOT NULL DEFAULT 0,
+  `project_id` bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  `color` varchar(15) DEFAULT NULL,
+  `order` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `taxes`
+--
+
+CREATE TABLE `taxes` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `rate` text NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `templates`
+--
+
+CREATE TABLE `templates` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `template_name` varchar(191) NOT NULL,
+  `prompt` text NOT NULL,
+  `module` varchar(191) NOT NULL,
+  `field_json` text NOT NULL,
+  `is_tone` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `terminations`
+--
+
+CREATE TABLE `terminations` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL DEFAULT 0,
+  `notice_date` date NOT NULL,
+  `termination_date` date NOT NULL,
+  `termination_type` varchar(191) DEFAULT NULL,
+  `description` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `termination_types`
+--
+
+CREATE TABLE `termination_types` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `timesheets`
+--
+
+CREATE TABLE `timesheets` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `project_id` int(11) NOT NULL,
+  `task_id` int(11) NOT NULL DEFAULT 0,
+  `date` date NOT NULL,
+  `time` time NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `time_trackers`
+--
+
+CREATE TABLE `time_trackers` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `project_id` int(11) DEFAULT NULL,
+  `task_id` int(11) DEFAULT NULL,
+  `tag_id` text DEFAULT NULL,
+  `name` varchar(191) DEFAULT NULL,
+  `is_billable` int(11) NOT NULL DEFAULT 0,
+  `start_time` datetime DEFAULT NULL,
+  `end_time` datetime DEFAULT NULL,
+  `total_time` varchar(191) NOT NULL DEFAULT '0',
+  `is_active` varchar(191) NOT NULL DEFAULT '1',
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `track_photos`
+--
+
+CREATE TABLE `track_photos` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `track_id` int(11) NOT NULL DEFAULT 0,
+  `user_id` int(11) NOT NULL DEFAULT 0,
+  `img_path` varchar(191) DEFAULT NULL,
+  `time` datetime DEFAULT NULL,
+  `status` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `trainers`
+--
+
+CREATE TABLE `trainers` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `branch` varchar(191) NOT NULL,
+  `firstname` varchar(191) NOT NULL,
+  `lastname` varchar(191) NOT NULL,
+  `contact` varchar(191) NOT NULL,
+  `email` varchar(191) NOT NULL,
+  `address` text DEFAULT NULL,
+  `expertise` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `trainings`
+--
+
+CREATE TABLE `trainings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `branch` int(11) NOT NULL,
+  `trainer_option` int(11) NOT NULL,
+  `training_type` int(11) NOT NULL,
+  `trainer` int(11) NOT NULL,
+  `training_cost` double NOT NULL DEFAULT 0,
+  `employee` int(11) NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `description` text DEFAULT NULL,
+  `performance` int(11) NOT NULL DEFAULT 0,
+  `status` int(11) NOT NULL DEFAULT 0,
+  `remarks` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `training_types`
+--
+
+CREATE TABLE `training_types` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `transactions`
+--
+
+CREATE TABLE `transactions` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `user_type` varchar(191) NOT NULL,
+  `account` int(11) NOT NULL,
+  `type` varchar(191) DEFAULT NULL,
+  `amount` decimal(16,2) NOT NULL DEFAULT 0.00,
+  `description` text DEFAULT NULL,
+  `date` date NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `payment_id` int(11) NOT NULL DEFAULT 0,
+  `category` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `transaction_lines`
+--
+
+CREATE TABLE `transaction_lines` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `account_id` int(11) NOT NULL,
+  `reference` varchar(191) NOT NULL,
+  `reference_id` int(11) NOT NULL,
+  `reference_sub_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `credit` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `debit` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `transaction_orders`
+--
+
+CREATE TABLE `transaction_orders` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `req_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `req_user_id` int(11) NOT NULL,
+  `status` int(11) NOT NULL DEFAULT 0,
+  `date` date DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `transfers`
+--
+
+CREATE TABLE `transfers` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL DEFAULT 0,
+  `branch_id` int(11) NOT NULL DEFAULT 0,
+  `department_id` int(11) NOT NULL DEFAULT 0,
+  `transfer_date` date NOT NULL,
+  `description` varchar(191) DEFAULT NULL,
+  `created_by` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `travels`
+--
+
+CREATE TABLE `travels` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `employee_id` int(11) NOT NULL DEFAULT 0,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `purpose_of_visit` varchar(191) DEFAULT NULL,
+  `place_of_visit` varchar(191) DEFAULT NULL,
+  `description` varchar(191) DEFAULT NULL,
+  `created_by` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `users`
+--
+
+CREATE TABLE `users` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) DEFAULT NULL,
+  `email` varchar(191) NOT NULL,
+  `email_verified_at` timestamp NULL DEFAULT NULL,
+  `password` varchar(191) DEFAULT NULL,
+  `plan` int(11) DEFAULT NULL,
+  `plan_expire_date` date DEFAULT NULL,
+  `ai_agent_tokens_used` int(11) NOT NULL DEFAULT 0,
+  `requested_plan` int(11) NOT NULL DEFAULT 0,
+  `trial_plan` int(11) NOT NULL DEFAULT 0,
+  `trial_expire_date` date DEFAULT NULL,
+  `type` varchar(100) DEFAULT NULL,
+  `storage_limit` double NOT NULL DEFAULT 0,
+  `avatar` varchar(191) NOT NULL DEFAULT 'avatar.png',
+  `messenger_color` varchar(191) NOT NULL DEFAULT '#2180f3',
+  `lang` varchar(100) DEFAULT NULL,
+  `default_pipeline` int(11) DEFAULT NULL,
+  `active_status` tinyint(1) NOT NULL DEFAULT 0,
+  `delete_status` int(11) NOT NULL DEFAULT 1,
+  `mode` varchar(10) NOT NULL DEFAULT 'light',
+  `dark_mode` tinyint(1) NOT NULL DEFAULT 0,
+  `is_disable` int(11) NOT NULL DEFAULT 1,
+  `is_enable_login` int(11) NOT NULL DEFAULT 1,
+  `is_active` int(11) NOT NULL DEFAULT 1,
+  `referral_code` int(11) NOT NULL DEFAULT 0,
+  `used_referral_code` int(11) NOT NULL DEFAULT 0,
+  `commission_amount` int(11) NOT NULL DEFAULT 0,
+  `last_login_at` datetime DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `remember_token` varchar(100) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `is_email_verified` tinyint(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `users_verify`
+--
+
+CREATE TABLE `users_verify` (
+  `user_id` int(11) NOT NULL,
+  `token` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_contacts`
+--
+
+CREATE TABLE `user_contacts` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `parent_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_coupons`
+--
+
+CREATE TABLE `user_coupons` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user` int(11) NOT NULL,
+  `coupon` int(11) NOT NULL,
+  `order` varchar(191) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_deals`
+--
+
+CREATE TABLE `user_deals` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `deal_id` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_email_templates`
+--
+
+CREATE TABLE `user_email_templates` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `template_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `is_active` int(11) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_leads`
+--
+
+CREATE TABLE `user_leads` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `lead_id` bigint(20) UNSIGNED NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_to_dos`
+--
+
+CREATE TABLE `user_to_dos` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `is_complete` tinyint(1) NOT NULL DEFAULT 0,
+  `user_id` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `venders`
+--
+
+CREATE TABLE `venders` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `vender_id` int(11) NOT NULL,
+  `name` varchar(191) DEFAULT NULL,
+  `email` varchar(191) DEFAULT NULL,
+  `tax_number` varchar(191) DEFAULT NULL,
+  `password` varchar(191) DEFAULT NULL,
+  `contact` varchar(191) DEFAULT NULL,
+  `avatar` varchar(100) NOT NULL DEFAULT '',
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `is_active` int(11) NOT NULL DEFAULT 1,
+  `email_verified_at` timestamp NULL DEFAULT NULL,
+  `billing_name` varchar(191) DEFAULT NULL,
+  `billing_country` varchar(191) DEFAULT NULL,
+  `billing_state` varchar(191) DEFAULT NULL,
+  `billing_city` varchar(191) DEFAULT NULL,
+  `billing_phone` varchar(191) DEFAULT NULL,
+  `billing_zip` varchar(191) DEFAULT NULL,
+  `billing_address` text DEFAULT NULL,
+  `shipping_name` varchar(191) DEFAULT NULL,
+  `shipping_country` varchar(191) DEFAULT NULL,
+  `shipping_state` varchar(191) DEFAULT NULL,
+  `shipping_city` varchar(191) DEFAULT NULL,
+  `shipping_phone` varchar(191) DEFAULT NULL,
+  `shipping_zip` varchar(191) DEFAULT NULL,
+  `shipping_address` text DEFAULT NULL,
+  `lang` varchar(191) NOT NULL DEFAULT 'en',
+  `balance` double NOT NULL DEFAULT 0,
+  `remember_token` varchar(100) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `warehouses`
+--
+
+CREATE TABLE `warehouses` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `name` varchar(191) NOT NULL,
+  `address` text NOT NULL,
+  `city` varchar(191) NOT NULL,
+  `city_zip` varchar(191) NOT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `warehouse_products`
+--
+
+CREATE TABLE `warehouse_products` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `warehouse_id` int(11) NOT NULL DEFAULT 0,
+  `product_id` int(11) NOT NULL DEFAULT 0,
+  `quantity` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `warehouse_transfers`
+--
+
+CREATE TABLE `warehouse_transfers` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `from_warehouse` int(11) NOT NULL DEFAULT 0,
+  `to_warehouse` int(11) NOT NULL DEFAULT 0,
+  `product_id` int(11) NOT NULL DEFAULT 0,
+  `quantity` int(11) NOT NULL DEFAULT 0,
+  `date` date DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `warnings`
+--
+
+CREATE TABLE `warnings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `warning_to` int(11) NOT NULL,
+  `warning_by` int(11) NOT NULL,
+  `subject` varchar(191) DEFAULT NULL,
+  `warning_date` date NOT NULL,
+  `description` varchar(191) DEFAULT NULL,
+  `created_by` varchar(191) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `webhook_settings`
+--
+
+CREATE TABLE `webhook_settings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `module` varchar(191) DEFAULT NULL,
+  `url` varchar(191) DEFAULT NULL,
+  `method` varchar(191) DEFAULT NULL,
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `zoom_meetings`
+--
+
+CREATE TABLE `zoom_meetings` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) DEFAULT NULL,
+  `meeting_id` int(11) NOT NULL DEFAULT 0,
+  `project_id` int(11) NOT NULL DEFAULT 0,
+  `user_id` varchar(191) DEFAULT NULL,
+  `client_id` int(11) NOT NULL DEFAULT 0,
+  `password` varchar(191) DEFAULT NULL,
+  `start_date` timestamp NOT NULL DEFAULT current_timestamp(),
+  `duration` int(11) NOT NULL DEFAULT 0,
+  `start_url` text DEFAULT NULL,
+  `join_url` varchar(191) DEFAULT NULL,
+  `status` varchar(191) DEFAULT 'waiting',
+  `created_by` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `activity_logs`
+--
+ALTER TABLE `activity_logs`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `admin_payment_settings`
+--
+ALTER TABLE `admin_payment_settings`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `admin_payment_settings_name_created_by_unique` (`name`,`created_by`);
+
+--
+-- Indexes for table `agent_conversations`
+--
+ALTER TABLE `agent_conversations`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `agent_conversations_company_user_id_index` (`company_user_id`),
+  ADD KEY `agent_conversations_user_id_index` (`user_id`),
+  ADD KEY `agent_conversations_created_at_index` (`created_at`),
+  ADD KEY `agent_conversations_conversation_id_index` (`conversation_id`);
+
+--
+-- Indexes for table `allowances`
+--
+ALTER TABLE `allowances`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `allowance_options`
+--
+ALTER TABLE `allowance_options`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `announcements`
+--
+ALTER TABLE `announcements`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `announcement_employees`
+--
+ALTER TABLE `announcement_employees`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `appraisals`
+--
+ALTER TABLE `appraisals`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `assets`
+--
+ALTER TABLE `assets`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `attendance_employees`
+--
+ALTER TABLE `attendance_employees`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `awards`
+--
+ALTER TABLE `awards`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `award_types`
+--
+ALTER TABLE `award_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bank_accounts`
+--
+ALTER TABLE `bank_accounts`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bank_transfers`
+--
+ALTER TABLE `bank_transfers`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bills`
+--
+ALTER TABLE `bills`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bill_accounts`
+--
+ALTER TABLE `bill_accounts`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bill_payments`
+--
+ALTER TABLE `bill_payments`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bill_products`
+--
+ALTER TABLE `bill_products`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `branches`
+--
+ALTER TABLE `branches`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `budgets`
+--
+ALTER TABLE `budgets`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bugs`
+--
+ALTER TABLE `bugs`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bug_comments`
+--
+ALTER TABLE `bug_comments`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bug_files`
+--
+ALTER TABLE `bug_files`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bug_statuses`
+--
+ALTER TABLE `bug_statuses`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `chart_of_accounts`
+--
+ALTER TABLE `chart_of_accounts`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `chart_of_account_parents`
+--
+ALTER TABLE `chart_of_account_parents`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `chart_of_account_sub_types`
+--
+ALTER TABLE `chart_of_account_sub_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `chart_of_account_types`
+--
+ALTER TABLE `chart_of_account_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `ch_favorites`
+--
+ALTER TABLE `ch_favorites`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `ch_messages`
+--
+ALTER TABLE `ch_messages`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `client_deals`
+--
+ALTER TABLE `client_deals`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `client_deals_client_id_foreign` (`client_id`),
+  ADD KEY `client_deals_deal_id_foreign` (`deal_id`);
+
+--
+-- Indexes for table `commissions`
+--
+ALTER TABLE `commissions`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `company_payment_settings`
+--
+ALTER TABLE `company_payment_settings`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `company_payment_settings_name_created_by_unique` (`name`,`created_by`);
+
+--
+-- Indexes for table `company_policies`
+--
+ALTER TABLE `company_policies`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `competencies`
+--
+ALTER TABLE `competencies`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `complaints`
+--
+ALTER TABLE `complaints`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `contracts`
+--
+ALTER TABLE `contracts`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `contract_attachment`
+--
+ALTER TABLE `contract_attachment`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `contract_comment`
+--
+ALTER TABLE `contract_comment`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `contract_notes`
+--
+ALTER TABLE `contract_notes`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `contract_types`
+--
+ALTER TABLE `contract_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `coupons`
+--
+ALTER TABLE `coupons`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `credit_notes`
+--
+ALTER TABLE `credit_notes`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `customers`
+--
+ALTER TABLE `customers`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `custom_fields`
+--
+ALTER TABLE `custom_fields`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `custom_field_values`
+--
+ALTER TABLE `custom_field_values`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `custom_field_values_record_id_field_id_unique` (`record_id`,`field_id`),
+  ADD KEY `custom_field_values_field_id_foreign` (`field_id`);
+
+--
+-- Indexes for table `custom_questions`
+--
+ALTER TABLE `custom_questions`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `deals`
+--
+ALTER TABLE `deals`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `deal_calls`
+--
+ALTER TABLE `deal_calls`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `deal_calls_deal_id_foreign` (`deal_id`);
+
+--
+-- Indexes for table `deal_discussions`
+--
+ALTER TABLE `deal_discussions`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `deal_discussions_deal_id_foreign` (`deal_id`);
+
+--
+-- Indexes for table `deal_emails`
+--
+ALTER TABLE `deal_emails`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `deal_emails_deal_id_foreign` (`deal_id`);
+
+--
+-- Indexes for table `deal_files`
+--
+ALTER TABLE `deal_files`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `deal_files_deal_id_foreign` (`deal_id`);
+
+--
+-- Indexes for table `deal_tasks`
+--
+ALTER TABLE `deal_tasks`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `deal_tasks_deal_id_foreign` (`deal_id`);
+
+--
+-- Indexes for table `debit_notes`
+--
+ALTER TABLE `debit_notes`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `deduction_options`
+--
+ALTER TABLE `deduction_options`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `departments`
+--
+ALTER TABLE `departments`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `designations`
+--
+ALTER TABLE `designations`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `documents`
+--
+ALTER TABLE `documents`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `ducument_uploads`
+--
+ALTER TABLE `ducument_uploads`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `email_templates`
+--
+ALTER TABLE `email_templates`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `email_template_langs`
+--
+ALTER TABLE `email_template_langs`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `employees`
+--
+ALTER TABLE `employees`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `employee_documents`
+--
+ALTER TABLE `employee_documents`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `estimations`
+--
+ALTER TABLE `estimations`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `events`
+--
+ALTER TABLE `events`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `event_employees`
+--
+ALTER TABLE `event_employees`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `expenses`
+--
+ALTER TABLE `expenses`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `experience_certificates`
+--
+ALTER TABLE `experience_certificates`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `failed_jobs`
+--
+ALTER TABLE `failed_jobs`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `form_builders`
+--
+ALTER TABLE `form_builders`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `form_builders_code_unique` (`code`);
+
+--
+-- Indexes for table `form_fields`
+--
+ALTER TABLE `form_fields`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `form_field_responses`
+--
+ALTER TABLE `form_field_responses`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `form_responses`
+--
+ALTER TABLE `form_responses`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `generate_offer_letters`
+--
+ALTER TABLE `generate_offer_letters`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `genrate_payslip_options`
+--
+ALTER TABLE `genrate_payslip_options`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `goals`
+--
+ALTER TABLE `goals`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `goal_trackings`
+--
+ALTER TABLE `goal_trackings`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `goal_types`
+--
+ALTER TABLE `goal_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `holidays`
+--
+ALTER TABLE `holidays`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `indicators`
+--
+ALTER TABLE `indicators`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `interview_schedules`
+--
+ALTER TABLE `interview_schedules`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `invoices`
+--
+ALTER TABLE `invoices`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `invoice_bank_transfers`
+--
+ALTER TABLE `invoice_bank_transfers`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `invoice_payments`
+--
+ALTER TABLE `invoice_payments`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `invoice_products`
+--
+ALTER TABLE `invoice_products`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `ip_restricts`
+--
+ALTER TABLE `ip_restricts`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `jobs`
+--
+ALTER TABLE `jobs`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `job_applications`
+--
+ALTER TABLE `job_applications`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `job_application_notes`
+--
+ALTER TABLE `job_application_notes`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `job_categories`
+--
+ALTER TABLE `job_categories`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `job_on_boards`
+--
+ALTER TABLE `job_on_boards`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `job_stages`
+--
+ALTER TABLE `job_stages`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `joining_letters`
+--
+ALTER TABLE `joining_letters`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `join_us`
+--
+ALTER TABLE `join_us`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `join_us_email_unique` (`email`);
+
+--
+-- Indexes for table `journal_entries`
+--
+ALTER TABLE `journal_entries`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `journal_items`
+--
+ALTER TABLE `journal_items`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `labels`
+--
+ALTER TABLE `labels`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `landing_page_settings`
+--
+ALTER TABLE `landing_page_settings`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `landing_page_settings_name_unique` (`name`);
+
+--
+-- Indexes for table `languages`
+--
+ALTER TABLE `languages`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `leads`
+--
+ALTER TABLE `leads`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `lead_activity_logs`
+--
+ALTER TABLE `lead_activity_logs`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `lead_calls`
+--
+ALTER TABLE `lead_calls`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `lead_calls_lead_id_foreign` (`lead_id`);
+
+--
+-- Indexes for table `lead_discussions`
+--
+ALTER TABLE `lead_discussions`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `lead_discussions_lead_id_foreign` (`lead_id`);
+
+--
+-- Indexes for table `lead_emails`
+--
+ALTER TABLE `lead_emails`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `lead_emails_lead_id_foreign` (`lead_id`);
+
+--
+-- Indexes for table `lead_files`
+--
+ALTER TABLE `lead_files`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `lead_files_lead_id_foreign` (`lead_id`);
+
+--
+-- Indexes for table `lead_stages`
+--
+ALTER TABLE `lead_stages`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `leaves`
+--
+ALTER TABLE `leaves`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `leave_types`
+--
+ALTER TABLE `leave_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `loans`
+--
+ALTER TABLE `loans`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `loan_options`
+--
+ALTER TABLE `loan_options`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `login_details`
+--
+ALTER TABLE `login_details`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `log_activities`
+--
+ALTER TABLE `log_activities`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `meetings`
+--
+ALTER TABLE `meetings`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `meeting_employees`
+--
+ALTER TABLE `meeting_employees`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `migrations`
+--
+ALTER TABLE `migrations`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `milestones`
+--
+ALTER TABLE `milestones`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `model_has_permissions`
+--
+ALTER TABLE `model_has_permissions`
+  ADD PRIMARY KEY (`permission_id`,`model_id`,`model_type`),
+  ADD KEY `model_has_permissions_model_id_model_type_index` (`model_id`,`model_type`);
+
+--
+-- Indexes for table `model_has_roles`
+--
+ALTER TABLE `model_has_roles`
+  ADD PRIMARY KEY (`role_id`,`model_id`,`model_type`),
+  ADD KEY `model_has_roles_model_id_model_type_index` (`model_id`,`model_type`);
+
+--
+-- Indexes for table `noc_certificates`
+--
+ALTER TABLE `noc_certificates`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `notifications`
+--
+ALTER TABLE `notifications`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `notification_templates`
+--
+ALTER TABLE `notification_templates`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `notification_template_langs`
+--
+ALTER TABLE `notification_template_langs`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `orders`
+--
+ALTER TABLE `orders`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `orders_order_id_unique` (`order_id`);
+
+--
+-- Indexes for table `other_payments`
+--
+ALTER TABLE `other_payments`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `overtimes`
+--
+ALTER TABLE `overtimes`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `password_resets`
+--
+ALTER TABLE `password_resets`
+  ADD KEY `password_resets_email_index` (`email`);
+
+--
+-- Indexes for table `payments`
+--
+ALTER TABLE `payments`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `payslip_types`
+--
+ALTER TABLE `payslip_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `pay_slips`
+--
+ALTER TABLE `pay_slips`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `performance_types`
+--
+ALTER TABLE `performance_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `permissions`
+--
+ALTER TABLE `permissions`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `personal_access_tokens`
+--
+ALTER TABLE `personal_access_tokens`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
+  ADD KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`);
+
+--
+-- Indexes for table `pipelines`
+--
+ALTER TABLE `pipelines`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `plans`
+--
+ALTER TABLE `plans`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `plans_name_unique` (`name`);
+
+--
+-- Indexes for table `plan_requests`
+--
+ALTER TABLE `plan_requests`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `pos`
+--
+ALTER TABLE `pos`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `pos_payments`
+--
+ALTER TABLE `pos_payments`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `pos_products`
+--
+ALTER TABLE `pos_products`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `product_services`
+--
+ALTER TABLE `product_services`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `product_service_categories`
+--
+ALTER TABLE `product_service_categories`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `product_service_units`
+--
+ALTER TABLE `product_service_units`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `projects`
+--
+ALTER TABLE `projects`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `projectstages`
+--
+ALTER TABLE `projectstages`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `project_email_templates`
+--
+ALTER TABLE `project_email_templates`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `project_expenses`
+--
+ALTER TABLE `project_expenses`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `project_invoices`
+--
+ALTER TABLE `project_invoices`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `project_tasks`
+--
+ALTER TABLE `project_tasks`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `project_users`
+--
+ALTER TABLE `project_users`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `promotions`
+--
+ALTER TABLE `promotions`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `proposals`
+--
+ALTER TABLE `proposals`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `proposal_products`
+--
+ALTER TABLE `proposal_products`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `purchases`
+--
+ALTER TABLE `purchases`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `purchase_payments`
+--
+ALTER TABLE `purchase_payments`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `purchase_products`
+--
+ALTER TABLE `purchase_products`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `quotations`
+--
+ALTER TABLE `quotations`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `quotation_products`
+--
+ALTER TABLE `quotation_products`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `referral_settings`
+--
+ALTER TABLE `referral_settings`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `referral_transactions`
+--
+ALTER TABLE `referral_transactions`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `resignations`
+--
+ALTER TABLE `resignations`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `revenues`
+--
+ALTER TABLE `revenues`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `roles`
+--
+ALTER TABLE `roles`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `role_has_permissions`
+--
+ALTER TABLE `role_has_permissions`
+  ADD PRIMARY KEY (`permission_id`,`role_id`),
+  ADD KEY `role_has_permissions_role_id_foreign` (`role_id`);
+
+--
+-- Indexes for table `saturation_deductions`
+--
+ALTER TABLE `saturation_deductions`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `settings`
+--
+ALTER TABLE `settings`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `settings_name_created_by_unique` (`name`,`created_by`);
+
+--
+-- Indexes for table `set_salaries`
+--
+ALTER TABLE `set_salaries`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `sources`
+--
+ALTER TABLE `sources`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `stages`
+--
+ALTER TABLE `stages`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `stock_reports`
+--
+ALTER TABLE `stock_reports`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `supports`
+--
+ALTER TABLE `supports`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `support_replies`
+--
+ALTER TABLE `support_replies`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `task_checklists`
+--
+ALTER TABLE `task_checklists`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `task_comments`
+--
+ALTER TABLE `task_comments`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `task_files`
+--
+ALTER TABLE `task_files`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `task_stages`
+--
+ALTER TABLE `task_stages`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `taxes`
+--
+ALTER TABLE `taxes`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `templates`
+--
+ALTER TABLE `templates`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `terminations`
+--
+ALTER TABLE `terminations`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `termination_types`
+--
+ALTER TABLE `termination_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `timesheets`
+--
+ALTER TABLE `timesheets`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `time_trackers`
+--
+ALTER TABLE `time_trackers`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `track_photos`
+--
+ALTER TABLE `track_photos`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `trainers`
+--
+ALTER TABLE `trainers`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `trainings`
+--
+ALTER TABLE `trainings`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `training_types`
+--
+ALTER TABLE `training_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `transactions`
+--
+ALTER TABLE `transactions`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `transaction_lines`
+--
+ALTER TABLE `transaction_lines`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `transaction_orders`
+--
+ALTER TABLE `transaction_orders`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `transfers`
+--
+ALTER TABLE `transfers`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `travels`
+--
+ALTER TABLE `travels`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `users`
+--
+ALTER TABLE `users`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `users_email_unique` (`email`);
+
+--
+-- Indexes for table `user_contacts`
+--
+ALTER TABLE `user_contacts`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `user_coupons`
+--
+ALTER TABLE `user_coupons`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `user_deals`
+--
+ALTER TABLE `user_deals`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_deals_user_id_foreign` (`user_id`),
+  ADD KEY `user_deals_deal_id_foreign` (`deal_id`);
+
+--
+-- Indexes for table `user_email_templates`
+--
+ALTER TABLE `user_email_templates`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `user_leads`
+--
+ALTER TABLE `user_leads`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_leads_user_id_foreign` (`user_id`),
+  ADD KEY `user_leads_lead_id_foreign` (`lead_id`);
+
+--
+-- Indexes for table `user_to_dos`
+--
+ALTER TABLE `user_to_dos`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `venders`
+--
+ALTER TABLE `venders`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `warehouses`
+--
+ALTER TABLE `warehouses`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `warehouse_products`
+--
+ALTER TABLE `warehouse_products`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `warehouse_transfers`
+--
+ALTER TABLE `warehouse_transfers`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `warnings`
+--
+ALTER TABLE `warnings`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `webhook_settings`
+--
+ALTER TABLE `webhook_settings`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `zoom_meetings`
+--
+ALTER TABLE `zoom_meetings`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `activity_logs`
+--
+ALTER TABLE `activity_logs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `admin_payment_settings`
+--
+ALTER TABLE `admin_payment_settings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `agent_conversations`
+--
+ALTER TABLE `agent_conversations`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `allowances`
+--
+ALTER TABLE `allowances`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `allowance_options`
+--
+ALTER TABLE `allowance_options`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `announcements`
+--
+ALTER TABLE `announcements`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `announcement_employees`
+--
+ALTER TABLE `announcement_employees`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `appraisals`
+--
+ALTER TABLE `appraisals`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `assets`
+--
+ALTER TABLE `assets`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `attendance_employees`
+--
+ALTER TABLE `attendance_employees`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `awards`
+--
+ALTER TABLE `awards`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `award_types`
+--
+ALTER TABLE `award_types`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bank_accounts`
+--
+ALTER TABLE `bank_accounts`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bank_transfers`
+--
+ALTER TABLE `bank_transfers`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bills`
+--
+ALTER TABLE `bills`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bill_accounts`
+--
+ALTER TABLE `bill_accounts`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bill_payments`
+--
+ALTER TABLE `bill_payments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bill_products`
+--
+ALTER TABLE `bill_products`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `branches`
+--
+ALTER TABLE `branches`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `budgets`
+--
+ALTER TABLE `budgets`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bugs`
+--
+ALTER TABLE `bugs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bug_comments`
+--
+ALTER TABLE `bug_comments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bug_files`
+--
+ALTER TABLE `bug_files`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bug_statuses`
+--
+ALTER TABLE `bug_statuses`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `chart_of_accounts`
+--
+ALTER TABLE `chart_of_accounts`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `chart_of_account_parents`
+--
+ALTER TABLE `chart_of_account_parents`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `chart_of_account_sub_types`
+--
+ALTER TABLE `chart_of_account_sub_types`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `chart_of_account_types`
+--
+ALTER TABLE `chart_of_account_types`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `client_deals`
+--
+ALTER TABLE `client_deals`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `commissions`
+--
+ALTER TABLE `commissions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `company_payment_settings`
+--
+ALTER TABLE `company_payment_settings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `company_policies`
+--
+ALTER TABLE `company_policies`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `competencies`
+--
+ALTER TABLE `competencies`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `complaints`
+--
+ALTER TABLE `complaints`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `contracts`
+--
+ALTER TABLE `contracts`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `contract_attachment`
+--
+ALTER TABLE `contract_attachment`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `contract_comment`
+--
+ALTER TABLE `contract_comment`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `contract_notes`
+--
+ALTER TABLE `contract_notes`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `contract_types`
+--
+ALTER TABLE `contract_types`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `coupons`
+--
+ALTER TABLE `coupons`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `credit_notes`
+--
+ALTER TABLE `credit_notes`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `customers`
+--
+ALTER TABLE `customers`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `custom_fields`
+--
+ALTER TABLE `custom_fields`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `custom_field_values`
+--
+ALTER TABLE `custom_field_values`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `custom_questions`
+--
+ALTER TABLE `custom_questions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `deals`
+--
+ALTER TABLE `deals`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `deal_calls`
+--
+ALTER TABLE `deal_calls`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `deal_discussions`
+--
+ALTER TABLE `deal_discussions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `deal_emails`
+--
+ALTER TABLE `deal_emails`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `deal_files`
+--
+ALTER TABLE `deal_files`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `deal_tasks`
+--
+ALTER TABLE `deal_tasks`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `debit_notes`
+--
+ALTER TABLE `debit_notes`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `deduction_options`
+--
+ALTER TABLE `deduction_options`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `departments`
+--
+ALTER TABLE `departments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `designations`
+--
+ALTER TABLE `designations`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `documents`
+--
+ALTER TABLE `documents`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `ducument_uploads`
+--
+ALTER TABLE `ducument_uploads`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `email_templates`
+--
+ALTER TABLE `email_templates`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `email_template_langs`
+--
+ALTER TABLE `email_template_langs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `employees`
+--
+ALTER TABLE `employees`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `employee_documents`
+--
+ALTER TABLE `employee_documents`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `estimations`
+--
+ALTER TABLE `estimations`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `events`
+--
+ALTER TABLE `events`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `event_employees`
+--
+ALTER TABLE `event_employees`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `expenses`
+--
+ALTER TABLE `expenses`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `experience_certificates`
+--
+ALTER TABLE `experience_certificates`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `failed_jobs`
+--
+ALTER TABLE `failed_jobs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `form_builders`
+--
+ALTER TABLE `form_builders`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `form_fields`
+--
+ALTER TABLE `form_fields`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `form_field_responses`
+--
+ALTER TABLE `form_field_responses`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `form_responses`
+--
+ALTER TABLE `form_responses`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `generate_offer_letters`
+--
+ALTER TABLE `generate_offer_letters`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `genrate_payslip_options`
+--
+ALTER TABLE `genrate_payslip_options`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `goals`
+--
+ALTER TABLE `goals`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `goal_trackings`
+--
+ALTER TABLE `goal_trackings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `goal_types`
+--
+ALTER TABLE `goal_types`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `holidays`
+--
+ALTER TABLE `holidays`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `indicators`
+--
+ALTER TABLE `indicators`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `interview_schedules`
+--
+ALTER TABLE `interview_schedules`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `invoices`
+--
+ALTER TABLE `invoices`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `invoice_bank_transfers`
+--
+ALTER TABLE `invoice_bank_transfers`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `invoice_payments`
+--
+ALTER TABLE `invoice_payments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `invoice_products`
+--
+ALTER TABLE `invoice_products`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `ip_restricts`
+--
+ALTER TABLE `ip_restricts`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `jobs`
+--
+ALTER TABLE `jobs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `job_applications`
+--
+ALTER TABLE `job_applications`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `job_application_notes`
+--
+ALTER TABLE `job_application_notes`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `job_categories`
+--
+ALTER TABLE `job_categories`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `job_on_boards`
+--
+ALTER TABLE `job_on_boards`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `job_stages`
+--
+ALTER TABLE `job_stages`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `joining_letters`
+--
+ALTER TABLE `joining_letters`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `join_us`
+--
+ALTER TABLE `join_us`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `journal_entries`
+--
+ALTER TABLE `journal_entries`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `journal_items`
+--
+ALTER TABLE `journal_items`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `labels`
+--
+ALTER TABLE `labels`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `landing_page_settings`
+--
+ALTER TABLE `landing_page_settings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `languages`
+--
+ALTER TABLE `languages`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `leads`
+--
+ALTER TABLE `leads`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `lead_activity_logs`
+--
+ALTER TABLE `lead_activity_logs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `lead_calls`
+--
+ALTER TABLE `lead_calls`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `lead_discussions`
+--
+ALTER TABLE `lead_discussions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `lead_emails`
+--
+ALTER TABLE `lead_emails`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `lead_files`
+--
+ALTER TABLE `lead_files`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `lead_stages`
+--
+ALTER TABLE `lead_stages`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `leaves`
+--
+ALTER TABLE `leaves`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `leave_types`
+--
+ALTER TABLE `leave_types`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `loans`
+--
+ALTER TABLE `loans`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `loan_options`
+--
+ALTER TABLE `loan_options`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `login_details`
+--
+ALTER TABLE `login_details`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `log_activities`
+--
+ALTER TABLE `log_activities`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `meetings`
+--
+ALTER TABLE `meetings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `meeting_employees`
+--
+ALTER TABLE `meeting_employees`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `migrations`
+--
+ALTER TABLE `migrations`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `milestones`
+--
+ALTER TABLE `milestones`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `noc_certificates`
+--
+ALTER TABLE `noc_certificates`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `notifications`
+--
+ALTER TABLE `notifications`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `notification_templates`
+--
+ALTER TABLE `notification_templates`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `notification_template_langs`
+--
+ALTER TABLE `notification_template_langs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `orders`
+--
+ALTER TABLE `orders`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `other_payments`
+--
+ALTER TABLE `other_payments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `overtimes`
+--
+ALTER TABLE `overtimes`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `payments`
+--
+ALTER TABLE `payments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `payslip_types`
+--
+ALTER TABLE `payslip_types`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `pay_slips`
+--
+ALTER TABLE `pay_slips`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `performance_types`
+--
+ALTER TABLE `performance_types`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `permissions`
+--
+ALTER TABLE `permissions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `personal_access_tokens`
+--
+ALTER TABLE `personal_access_tokens`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `pipelines`
+--
+ALTER TABLE `pipelines`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `plans`
+--
+ALTER TABLE `plans`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `plan_requests`
+--
+ALTER TABLE `plan_requests`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `pos`
+--
+ALTER TABLE `pos`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `pos_payments`
+--
+ALTER TABLE `pos_payments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `pos_products`
+--
+ALTER TABLE `pos_products`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `product_services`
+--
+ALTER TABLE `product_services`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `product_service_categories`
+--
+ALTER TABLE `product_service_categories`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `product_service_units`
+--
+ALTER TABLE `product_service_units`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `projects`
+--
+ALTER TABLE `projects`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `projectstages`
+--
+ALTER TABLE `projectstages`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `project_email_templates`
+--
+ALTER TABLE `project_email_templates`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `project_expenses`
+--
+ALTER TABLE `project_expenses`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `project_invoices`
+--
+ALTER TABLE `project_invoices`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `project_tasks`
+--
+ALTER TABLE `project_tasks`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `project_users`
+--
+ALTER TABLE `project_users`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `promotions`
+--
+ALTER TABLE `promotions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `proposals`
+--
+ALTER TABLE `proposals`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `proposal_products`
+--
+ALTER TABLE `proposal_products`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `purchases`
+--
+ALTER TABLE `purchases`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `purchase_payments`
+--
+ALTER TABLE `purchase_payments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `purchase_products`
+--
+ALTER TABLE `purchase_products`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `quotations`
+--
+ALTER TABLE `quotations`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `quotation_products`
+--
+ALTER TABLE `quotation_products`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `referral_settings`
+--
+ALTER TABLE `referral_settings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `referral_transactions`
+--
+ALTER TABLE `referral_transactions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `resignations`
+--
+ALTER TABLE `resignations`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `revenues`
+--
+ALTER TABLE `revenues`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `roles`
+--
+ALTER TABLE `roles`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `saturation_deductions`
+--
+ALTER TABLE `saturation_deductions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `settings`
+--
+ALTER TABLE `settings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `set_salaries`
+--
+ALTER TABLE `set_salaries`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `sources`
+--
+ALTER TABLE `sources`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `stages`
+--
+ALTER TABLE `stages`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `stock_reports`
+--
+ALTER TABLE `stock_reports`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `supports`
+--
+ALTER TABLE `supports`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `support_replies`
+--
+ALTER TABLE `support_replies`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `task_checklists`
+--
+ALTER TABLE `task_checklists`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `task_comments`
+--
+ALTER TABLE `task_comments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `task_files`
+--
+ALTER TABLE `task_files`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `task_stages`
+--
+ALTER TABLE `task_stages`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `taxes`
+--
+ALTER TABLE `taxes`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `templates`
+--
+ALTER TABLE `templates`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `terminations`
+--
+ALTER TABLE `terminations`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `termination_types`
+--
+ALTER TABLE `termination_types`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `timesheets`
+--
+ALTER TABLE `timesheets`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `time_trackers`
+--
+ALTER TABLE `time_trackers`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `track_photos`
+--
+ALTER TABLE `track_photos`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `trainers`
+--
+ALTER TABLE `trainers`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `trainings`
+--
+ALTER TABLE `trainings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `training_types`
+--
+ALTER TABLE `training_types`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `transactions`
+--
+ALTER TABLE `transactions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `transaction_lines`
+--
+ALTER TABLE `transaction_lines`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `transaction_orders`
+--
+ALTER TABLE `transaction_orders`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `transfers`
+--
+ALTER TABLE `transfers`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `travels`
+--
+ALTER TABLE `travels`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `users`
+--
+ALTER TABLE `users`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `user_contacts`
+--
+ALTER TABLE `user_contacts`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `user_coupons`
+--
+ALTER TABLE `user_coupons`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `user_deals`
+--
+ALTER TABLE `user_deals`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `user_email_templates`
+--
+ALTER TABLE `user_email_templates`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `user_leads`
+--
+ALTER TABLE `user_leads`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `user_to_dos`
+--
+ALTER TABLE `user_to_dos`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `venders`
+--
+ALTER TABLE `venders`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `warehouses`
+--
+ALTER TABLE `warehouses`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `warehouse_products`
+--
+ALTER TABLE `warehouse_products`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `warehouse_transfers`
+--
+ALTER TABLE `warehouse_transfers`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `warnings`
+--
+ALTER TABLE `warnings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `webhook_settings`
+--
+ALTER TABLE `webhook_settings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `zoom_meetings`
+--
+ALTER TABLE `zoom_meetings`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `agent_conversations`
+--
+ALTER TABLE `agent_conversations`
+  ADD CONSTRAINT `agent_conversations_company_user_id_foreign` FOREIGN KEY (`company_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `agent_conversations_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `client_deals`
+--
+ALTER TABLE `client_deals`
+  ADD CONSTRAINT `client_deals_client_id_foreign` FOREIGN KEY (`client_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `client_deals_deal_id_foreign` FOREIGN KEY (`deal_id`) REFERENCES `deals` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `custom_field_values`
+--
+ALTER TABLE `custom_field_values`
+  ADD CONSTRAINT `custom_field_values_field_id_foreign` FOREIGN KEY (`field_id`) REFERENCES `custom_fields` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `deal_calls`
+--
+ALTER TABLE `deal_calls`
+  ADD CONSTRAINT `deal_calls_deal_id_foreign` FOREIGN KEY (`deal_id`) REFERENCES `deals` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `deal_discussions`
+--
+ALTER TABLE `deal_discussions`
+  ADD CONSTRAINT `deal_discussions_deal_id_foreign` FOREIGN KEY (`deal_id`) REFERENCES `deals` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `deal_emails`
+--
+ALTER TABLE `deal_emails`
+  ADD CONSTRAINT `deal_emails_deal_id_foreign` FOREIGN KEY (`deal_id`) REFERENCES `deals` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `deal_files`
+--
+ALTER TABLE `deal_files`
+  ADD CONSTRAINT `deal_files_deal_id_foreign` FOREIGN KEY (`deal_id`) REFERENCES `deals` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `deal_tasks`
+--
+ALTER TABLE `deal_tasks`
+  ADD CONSTRAINT `deal_tasks_deal_id_foreign` FOREIGN KEY (`deal_id`) REFERENCES `deals` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `lead_calls`
+--
+ALTER TABLE `lead_calls`
+  ADD CONSTRAINT `lead_calls_lead_id_foreign` FOREIGN KEY (`lead_id`) REFERENCES `leads` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `lead_discussions`
+--
+ALTER TABLE `lead_discussions`
+  ADD CONSTRAINT `lead_discussions_lead_id_foreign` FOREIGN KEY (`lead_id`) REFERENCES `leads` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `lead_emails`
+--
+ALTER TABLE `lead_emails`
+  ADD CONSTRAINT `lead_emails_lead_id_foreign` FOREIGN KEY (`lead_id`) REFERENCES `leads` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `lead_files`
+--
+ALTER TABLE `lead_files`
+  ADD CONSTRAINT `lead_files_lead_id_foreign` FOREIGN KEY (`lead_id`) REFERENCES `leads` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `model_has_permissions`
+--
+ALTER TABLE `model_has_permissions`
+  ADD CONSTRAINT `model_has_permissions_permission_id_foreign` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `model_has_roles`
+--
+ALTER TABLE `model_has_roles`
+  ADD CONSTRAINT `model_has_roles_role_id_foreign` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `role_has_permissions`
+--
+ALTER TABLE `role_has_permissions`
+  ADD CONSTRAINT `role_has_permissions_permission_id_foreign` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `role_has_permissions_role_id_foreign` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `user_deals`
+--
+ALTER TABLE `user_deals`
+  ADD CONSTRAINT `user_deals_deal_id_foreign` FOREIGN KEY (`deal_id`) REFERENCES `deals` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `user_deals_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `user_leads`
+--
+ALTER TABLE `user_leads`
+  ADD CONSTRAINT `user_leads_lead_id_foreign` FOREIGN KEY (`lead_id`) REFERENCES `leads` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `user_leads_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+COMMIT;

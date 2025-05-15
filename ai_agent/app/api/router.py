@@ -153,32 +153,32 @@ async def process_message(
     logger.info(f"[ROUTER] Processing message. Input ConvID: {request.conversation_id}, Using ConvID: {current_conversation_id}, Message: {request.message[:60]}")
 
     if is_visualization_request_by_keyword:
-        logger.info(f"[ROUTER-VIZ-BYPASS] Detected visualization request with keywords: {matched_keywords}. Bypassing dispatcher. (ConvID: {current_conversation_id})")
+        logger.info(f"[ROUTER-VIZ-BYPASS] Detected visualization request with keywords: {matched_keywords}. Using LangGraph visualization agent. (ConvID: {current_conversation_id})")
         try:
-            # Directly instantiate and use SQLAgent for visualization
-            from app.agents.sql_agent import SQLAgent # Ensure import
-            sql_agent_direct = SQLAgent()
-            logger.info(f"[ROUTER-VIZ-BYPASS] SQLAgent instantiated directly.")
+            # Use the new LangGraph Visualization Agent
+            from app.core.dependencies import get_visualization_agent
+            visualization_agent = get_visualization_agent()
+            logger.info(f"[ROUTER-VIZ-BYPASS] LangGraph visualization agent instantiated.")
             
-            direct_viz_response = await sql_agent_direct.generate_visualization(
+            direct_viz_response = await visualization_agent.generate_visualization(
                 query=request.message,
                 company_id=request.company_id,
                 user_id=request.user_id,
-                visualization_type=None, # SQLAgent will infer
+                visualization_type=None, # LangGraph agent will infer
                 session=session,
                 conversation_id=current_conversation_id
             )
-            logger.info(f"[ROUTER-VIZ-BYPASS] Response from direct SQLAgent.generate_visualization: {direct_viz_response.dict(exclude_none=True)}")
+            logger.info(f"[ROUTER-VIZ-BYPASS] Response from LangGraph visualization agent: {direct_viz_response.dict(exclude_none=True)}")
             direct_viz_response.agent_type = "visualization" # Ensure agent_type
             return direct_viz_response
         except Exception as e_direct_viz:
-            logger.error(f"[ROUTER-VIZ-BYPASS] Error in direct visualization call: {str(e_direct_viz)}", exc_info=True)
+            logger.error(f"[ROUTER-VIZ-BYPASS] Error in LangGraph visualization call: {str(e_direct_viz)}", exc_info=True)
             return AgentResponse(
-                response=f"Error in direct visualization bypass: {str(e_direct_viz)}",
+                response=f"Error in LangGraph visualization: {str(e_direct_viz)}",
                 conversation_id=current_conversation_id,
-                conversation_title="Router Viz Bypass Error",
+                conversation_title="Visualization Error",
                 tokens_used=0, tokens_remaining=None, visualization=None,
-                agent_type="error_router_viz_bypass"
+                agent_type="error_visualization"
             )
     # --- End Direct Visualization Path ---
     

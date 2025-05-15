@@ -17,7 +17,7 @@ from langchain.tools import Tool
 from app.agents.base_agent import BaseAgent, AgentResponse, VisualizationResult, ActionResult
 from app.database.connection import DatabaseConnection, get_company_isolated_sql_database, get_company_isolation_column
 from app.core.llm import get_llm, get_embedding_model
-from app.visualizations.generator import generate_visualization_from_data
+from app.visualizations.visualization_agent import VisualizationAgent
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain.agents import AgentExecutor
 from langchain.agents.format_scratchpad import format_to_openai_function_messages
@@ -332,64 +332,23 @@ Today's date is {self._get_current_date()}
             visualization_type = detected_viz_type
         
         try:
-            # Get SQL database with proper isolation
-            sql_database = get_company_isolated_sql_database(
+            # Create visualization agent instance
+            viz_agent = VisualizationAgent()
+            
+            # Let the visualization agent handle everything
+            result = viz_agent.generate_visualization(
+                query=query,
                 company_id=company_id,
-                include_tables=self.relevant_tables
+                requested_chart_type=visualization_type
             )
             
-            # Generate SQL query from natural language
-            system_context = f"""
-You are a data analyst working with SQL to extract data for visualizations.
-You need to convert natural language queries into SQL. The query should be focused on {self.type} data.
-
-IMPORTANT DATABASE CONSTRAINTS:
-1. Always include WHERE created_by = {company_id} in ALL your SQL queries
-2. Only query tables relevant to {self.type}: {', '.join(self.relevant_tables)}
-3. Make sure your query returns data in a format suitable for visualization
-4. Include appropriate GROUP BY clauses for aggregate data
-5. Include ORDER BY for time series or ranked data
-6. Limit the result set to a reasonable size (e.g., top 10) if appropriate
-
-Just output the SQL query, nothing else. Do not include any explanations.
-"""
-            sql_query_response = await self.llm.ainvoke([
-                SystemMessage(content=system_context),
-                HumanMessage(content=f"Create a SQL query to visualize: {query}")
-            ])
-            sql_query = sql_query_response.content.strip()
-            
-            # Extract just the SQL if the response has additional text
-            sql_query = self._extract_sql_query(sql_query)
-            if not sql_query:
-                return VisualizationResult(
-                    data={"error": "Could not generate a valid SQL query for visualization"},
-                    explanation="I couldn't create a visualization because I couldn't formulate a proper database query for your request."
-                )
-            
-            try:
-                # Execute the query
-                raw_data = sql_database.run(sql_query)
-                
-                if not raw_data:
-                    return VisualizationResult(
-                        data={"error": "No data found", "chart_type": visualization_type or "bar"},
-                        explanation="I couldn't create the visualization because no data was found that matches your request."
-                    )
-                
-                # Generate visualization from the data
-                return await generate_visualization_from_data(
-                    data=raw_data,
-                    query=query,
-                    visualization_type=visualization_type,
-                    llm=self.llm
-                )
-                
-            except Exception as query_error:
-                logger.error(f"Error executing visualization query: {str(query_error)}\nQuery: {sql_query}")
-                return VisualizationResult(
-                    data={"error": "Database query error", "chart_type": visualization_type or "bar"},
-                    explanation=f"I encountered an error while trying to retrieve data for your visualization: {str(query_error)}"
+            # Convert result format to VisualizationResult
+            return VisualizationResult(
+                data=result.get("chart_data"),
+                explanation=result.get("explanation", "Here is the visualization you requested."),
+                tokens_used=result.get("tokens_used", 2),  # Using a fixed token value as agreed
+                chart_type=visualization_type,
+                query=query
                 )
                 
         except Exception as e:

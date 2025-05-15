@@ -42,6 +42,13 @@ async def lifespan(app: FastAPI):
     langgraph = get_langgraph()
     logger.info(f"LangGraph compiled in {time.time() - graph_start_time:.2f} seconds")
     
+    # Initialize Visualization LangGraph Agent
+    logger.info("Initializing Visualization LangGraph Agent...")
+    viz_start_time = time.time()
+    from app.core.dependencies import get_visualization_langgraph_agent
+    viz_agent = get_visualization_langgraph_agent()
+    logger.info(f"Visualization LangGraph agent initialized in {time.time() - viz_start_time:.2f} seconds")
+    
     logger.info(f"Total initialization time: {time.time() - start_time:.2f} seconds")
     
     # Application is now ready to receive requests
@@ -101,7 +108,7 @@ if __name__ == "__main__":
     import uvicorn
     
     # Determine port
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8080))
     
     # Start server
     uvicorn.run(

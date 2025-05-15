@@ -250,13 +250,13 @@ class AIAgentController extends Controller
             Log::info('Parsed AI Agent Response Data:', ['parsed_data' => $responseData]);
 
             $visualizationData = null;
-            if (isset($responseData['visualization']) && is_array($responseData['visualization'])) {
+            if (isset($responseData['visualization']) && is_array($responseData['visualization']) && !empty($responseData['visualization'])) {
+                // The new visualization agent should return a well-structured object or null.
+                // No need to convert empty array to stdClass anymore.
                 $visualizationData = $responseData['visualization'];
-                if (isset($visualizationData['options']) && (is_array($visualizationData['options']) && empty($visualizationData['options']))) {
-                    $visualizationData['options'] = new \stdClass();
-                }
+                 Log::info('Visualization data received from AI Agent:', ['visualization_data' => $visualizationData]);
             } else {
-                Log::warning('No visualization data found in AI Agent response');
+                Log::warning('No or empty visualization data found in AI Agent response');
             }
             
             // Python service returns 'token_usage' for the current request.
@@ -360,13 +360,9 @@ class AIAgentController extends Controller
 
         try {
             // Try fetching from agent service first
-            // The Python service's /api/conversation/{id} endpoint might need to be created or adjusted.
-            // For now, assuming it exists and is protected.
             $response = Http::timeout(30) 
-                ->withToken($aiAgentToken) // Send the JWT
-                ->get($agentApiUrl . '/api/conversation/' . $id, [ // Assuming this is the correct endpoint
-                    // 'company_id' => $company->id, // company_id is in the token, not needed in query params for GET
-                ]);
+                ->withToken($aiAgentToken)
+                ->get($agentApiUrl . '/api/conversation/' . $id);
 
             if ($response->failed()) {
                 Log::error('AI Agent history API request failed, falling back to database.', [
@@ -375,19 +371,21 @@ class AIAgentController extends Controller
                     'conversation_id' => $id,
                     'company_id' => $company->id,
                 ]);
-                
-                // Fall back to database
                 return $this->getConversationHistoryFromDatabase($id, $company->id);
             }
 
-            // Process the response from the agent service
             $responseData = $response->json();
             
-            // Log the visualization data for debugging
+            // Ensure visualization data in history is also handled correctly (it should be stored as an object)
             if (isset($responseData['messages'])) {
-                foreach ($responseData['messages'] as $msg) {
-                    if (isset($msg['visualization'])) {
-                        Log::info("API response contains visualization data for message", [
+                foreach ($responseData['messages'] as &$msg) { // Use reference to modify
+                    if (isset($msg['visualization']) && is_array($msg['visualization']) && empty($msg['visualization'])) {
+                        // If an old empty array is stored, convert to null for consistency with new approach
+                        // Though ideally, new data will be stored correctly as an object or null.
+                        Log::warning('Found empty array for visualization in history, converting to null', ['message' => $msg]);
+                        $msg['visualization'] = null; 
+                    } else if (isset($msg['visualization'])) {
+                        Log::info("API history response contains visualization data for message", [
                             'conversation_id' => $id,
                             'visualization_type' => $msg['visualization']['chart_type'] ?? 'unknown'
                         ]);
@@ -447,12 +445,20 @@ class AIAgentController extends Controller
                     'agent_type' => $conv->agent_type ?? 'unknown'
                 ];
                 
-                // Add visualization data if present
                 if ($conv->visualization) {
-                    $agentMessage['visualization'] = $conv->visualization;
-                    \Log::info("Including visualization data from database for conversation {$conversationId}", [
-                        'chart_type' => $conv->visualization['chart_type'] ?? 'unknown'
-                    ]);
+                    // Ensure visualization data from DB is handled (it should be stored as an object or null)
+                    // If it was stored as an empty array from old logic, it might cause issues with new JS.
+                    // For now, we assume it's either a valid object or null.
+                    // If it's an empty array, the JS might handle it, or we might need a migration.
+                    $agentMessage['visualization'] = $conv->visualization; 
+                    if (is_array($conv->visualization) && empty($conv->visualization)) {
+                        Log::warning("Empty array for visualization found in DB for conversation {$conversationId}, passing as is. Review if this causes issues.", ['viz_data' => $conv->visualization]);
+                        // $agentMessage['visualization'] = null; // Optionally convert to null
+                    } else if ($conv->visualization) {
+                         Log::info("Including visualization data from database for conversation {$conversationId}", [
+                            'chart_type' => $conv->visualization['chart_type'] ?? 'unknown'
+                        ]);
+                    }
                 }
                 
                 $messages[] = $agentMessage;
@@ -481,4 +487,4 @@ class AIAgentController extends Controller
             ], 500);
         }
     }
-} 
+}
