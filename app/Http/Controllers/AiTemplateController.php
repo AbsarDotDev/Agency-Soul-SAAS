@@ -113,35 +113,42 @@ class AiTemplateController extends Controller
             $ai_creativity = (float)$request->ai_creativity;
             $modelName = Utility::getValByName('chat_gpt_model');
 
-            $complete = $open_ai->completion([
-                'model' => $modelName ? $modelName : '',
-                'prompt' => $prompt.' '.$lang_text,
+            // Prepare messages for chat completion
+            $messages = [
+                [
+                    "role" => "user",
+                    "content" => $prompt . ' ' . $lang_text
+                ]
+            ];
+
+            $complete = $open_ai->chat([
+                'model' => $modelName ? $modelName : 'gpt-3.5-turbo', // Default to gpt-3.5-turbo if not set
+                'messages' => $messages,
                 'temperature' => $ai_creativity,
                 'max_tokens' => $ai_tokens,
                 'n' => $max_results
             ]);
 
-            $response = json_decode($complete , true);
+            $response = json_decode($complete, true);
             if (isset($response['choices']))
             {
                 if (count($response['choices']) > 1)
                 {
                     foreach ($response['choices'] as $value)
                     {
-                        $text .= $counter . '. ' . ltrim($value['text']) . "\r\n\r\n\r\n";
+                        $text .= $counter . '. ' . ltrim($value['message']['content']) . "\\r\\n\\r\\n\\r\\n"; // Adjusted to get content from message object
                         $counter++;
                     }
                 }
                 else
                 {
-                    $text = $response['choices'][0]['text'];
+                    $text = $response['choices'][0]['message']['content']; // Adjusted to get content from message object
 
                 }
 
-                $tokens = $response['usage']['completion_tokens'];
-                $data= trim($text);
+                $tokens = $response['usage']['completion_tokens']; // Assuming 'completion_tokens' is still the desired metric
+                $data = trim($text);
                 return $data;
-
             }
             else
             {
@@ -149,7 +156,6 @@ class AiTemplateController extends Controller
                 $data['message'] = $response['error']['message'];
                 return $data;
             }
-
         }
     }
 
@@ -190,30 +196,39 @@ class AiTemplateController extends Controller
             $ai_creativity = 1.0;
             $modelName = Utility::getValByName('chat_gpt_model');
 
-            $complete = $open_ai->completion([
-                'model' => $modelName ? $modelName : '',
-                'prompt' => $prompt,
+            // Prepare messages for chat completion
+            $messages = [
+                [
+                    "role" => "user",
+                    "content" => $prompt
+                ]
+            ];
+
+            $complete = $open_ai->chat([
+                'model' => $modelName ? $modelName : 'gpt-3.5-turbo', // Default to gpt-3.5-turbo if not set
+                'messages' => $messages,
                 'temperature' => $ai_creativity,
                 'max_tokens' => $ai_tokens,
                 'n' => $max_results
             ]);
-            $response = json_decode($complete , true);
+
+            $response = json_decode($complete, true);
             if (isset($response['choices']))
             {
-                if (count($response['choices']) > 1)
+                if (count($response['choices']) > 1) // Should not happen with n=1, but kept for safety
                 {
                     foreach ($response['choices'] as $value)
                     {
-                        $text .= $counter . '. ' . ltrim($value['text']) . "\r\n\r\n\r\n";
+                        $text .= $counter . '. ' . ltrim($value['message']['content']) . "\\r\\n\\r\\n\\r\\n"; // Adjusted for chat response
                         $counter++;
                     }
                 }
                 else
                 {
-                    $text = $response['choices'][0]['text'];
+                    $text = $response['choices'][0]['message']['content']; // Adjusted for chat response
                 }
-                $tokens = $response['usage']['completion_tokens'];
-                $data= trim($text);
+                $tokens = $response['usage']['completion_tokens']; // Assuming 'completion_tokens' is still the desired metric
+                $data = trim($text);
                 return $data;
             }
             else

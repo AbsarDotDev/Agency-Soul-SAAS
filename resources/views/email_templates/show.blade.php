@@ -195,6 +195,7 @@
                                 <p class="col-4">{{__('Invoice Name')}} : <span class="pull-right text-primary">{invoice_name}</span></p>
                                 <p class="col-4">{{__('Invoice Number')}} : <span class="pull-right text-primary">{invoice_number}</span></p>
                                 <p class="col-4">{{__('Invoice Url')}} : <span class="pull-right text-primary">{invoice_url}</span></p>
+                                <p class="col-4">{{__('Bank Details')}} : <span class="pull-right text-primary">{bank_details}</span></p>
                             </div>
                         @elseif($emailTemplate->slug=='new_invoice_payment')
                             <div class="row">

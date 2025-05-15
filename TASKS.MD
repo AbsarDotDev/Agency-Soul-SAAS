@@ -55,3 +55,6 @@
 - [ ] Update plan activation logic in payment controllers.
 - [ ] Add route middleware for AI chat page access.
 - [ ] Create basic `ai_agent/chat.blade.php` view.
+
+## Discovered During Work
+- [ ] Debug Pusher integration for existing chat feature (Path not found, cluster issues, 500 error on send) - 2024-07-26

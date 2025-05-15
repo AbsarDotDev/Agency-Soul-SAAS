@@ -5,7 +5,7 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.1",
         "anandsiddharth/laravel-paytm-wallet": "^2.0",
         "anhskohbo/no-captcha": "^3.6",
         "arkitecht/laravel-twilio": "^1.6",

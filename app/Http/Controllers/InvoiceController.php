@@ -542,13 +542,12 @@ class InvoiceController extends Controller
                 }
 
                 $customerArr = [
-
                     'customer_name' => $customer->name,
                     'customer_email' => $customer->email,
                     'invoice_name' => $customer->name,
                     'invoice_number' => $invoice->invoice,
                     'invoice_url' => $invoice->url,
-
+                    'bank_details' => isset(Utility::getCompanyPaymentSetting($invoice->created_by)['bank_details']) ? Utility::getCompanyPaymentSetting($invoice->created_by)['bank_details'] : '-',
                 ];
                 $resp = Utility::sendEmailTemplate('customer_invoice_sent', [$customer->id => $customer->email], $customerArr);
 
@@ -575,13 +574,12 @@ class InvoiceController extends Controller
             $invoiceId = Crypt::encrypt($invoice->id);
             $invoice->url = route('invoice.pdf', $invoiceId);
             $customerArr = [
-
                 'customer_name' => $customer->name,
                 'customer_email' => $customer->email,
                 'invoice_name' => $customer->name,
                 'invoice_number' => $invoice->invoice,
                 'invoice_url' => $invoice->url,
-
+                'bank_details' => isset(Utility::getCompanyPaymentSetting($invoice->created_by)['bank_details']) ? Utility::getCompanyPaymentSetting($invoice->created_by)['bank_details'] : '-',
             ];
             $resp = Utility::sendEmailTemplate('customer_invoice_sent', [$customer->id => $customer->email], $customerArr);
 

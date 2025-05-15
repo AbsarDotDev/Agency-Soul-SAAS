@@ -1522,7 +1522,7 @@
                                                     </div>
 
                                                     <!-- Stripe -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingOne">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapseOne"
@@ -1578,10 +1578,10 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Paypal -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingTwo">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapseTwo"
@@ -1669,7 +1669,7 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- Paystack -->
                                                     <!-- <div class="accordion-item">
@@ -2153,7 +2153,7 @@
                                                     </div> -->
 
                                                     <!-- Skrill -->
-                                                    <div class="accordion-item">
+                                                    <!-- <div class="accordion-item">
                                                         <h2 class="accordion-header" id="headingnine">
                                                             <button class="accordion-button collapsed" type="button"
                                                                 data-bs-toggle="collapse" data-bs-target="#collapsenine"
@@ -2203,7 +2203,7 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
 
                                                     <!-- CoinGate -->
                                                     <!-- <div class="accordion-item">
