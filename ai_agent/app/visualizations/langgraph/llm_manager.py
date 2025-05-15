@@ -6,6 +6,7 @@ import json
 from copy import deepcopy
 from app.core.llm import get_llm
 from app.core.token_manager import TokenManager
+from typing import Optional
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ class LLMManager:
         """
         self.company_id = company_id
     
-    def invoke(self, prompt, **kwargs):
+    def invoke(self, prompt, **kwargs) -> Optional[str]:
         """
         Invoke the LLM with a prompt and variables.
         
@@ -47,8 +48,12 @@ class LLMManager:
             **kwargs: Variables to pass to the prompt
             
         Returns:
-            Response from the LLM
+            Response from the LLM or None if content is blocked or error occurs
         """
+        if not self.llm:
+            logger.error("LLM is not initialized.")
+            return None # Return None on error
+
         try:
             # Handle potentially problematic inputs like [('IT', 2), ('Audit', 2)]
             sanitized_kwargs = {}
@@ -93,9 +98,13 @@ class LLMManager:
                 
             return content
         except Exception as e:
-            logger.error(f"Error invoking LLM: {str(e)}")
-            # Return a default message rather than raising an exception
-            return "This data represents a count of employees per department. It's ideal for visualization with a bar or pie chart."
+            # Check for specific safety-related exceptions if possible
+            # For Gemini, this might be a google.api_core.exceptions.InvalidArgument or similar if blocked
+            if "safety rating" in str(e).lower() or "blocked" in str(e).lower():
+                logger.warning(f"LLM content blocked due to safety settings: {e}. kwargs: {kwargs}")
+                return None # Return None if content is blocked
+            logger.error(f"Error invoking LLM: {e}. kwargs: {kwargs}")
+            return None # Return None on other errors
 
     def _clean_string_for_prompt(self, text):
         """

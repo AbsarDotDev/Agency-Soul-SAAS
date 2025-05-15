@@ -5,6 +5,8 @@ import re
 import datetime
 import decimal
 import pandas as pd
+import ast
+from decimal import Decimal, InvalidOperation
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -219,22 +221,22 @@ class SQLAgent:
 
 IMPORTANT GUIDELINES:
 1. Use the EXACT table and column names from the schema
-2. ALWAYS include company isolation by adding 'created_by = {company_id}' in the WHERE clause
+2. ALWAYS include company isolation by adding 'created_by = {company_id}' in the WHERE clause (or the appropriate company isolation column for the table if not 'created_by').
 3. Write complete queries with all necessary JOINs, WHERE conditions, and columns
-4. Format dates according to MySQL syntax
+4. Format dates and perform date calculations using MySQL/MariaDB-compatible syntax (e.g., DATEDIFF(), TIMESTAMPDIFF(), DATE_FORMAT()). Avoid SQLite-specific functions like JULIANDAY().
 5. Do not use placeholder text like 'your_columns' or '...'
-6. Limit results to a reasonable number (e.g., LIMIT 10 for large result sets)
-7. Do not include any explanations, just return a valid SQL query
+6. Limit results to a reasonable number (e.g., LIMIT 10 for large result sets by default, unless the question implies otherwise like "all" or "top N")
+7. Do not include any explanations, just return a valid SQL query. Ensure the query is directly executable.
 
 DATABASE SCHEMA:
 {schema}
 
-EXAMPLE QUERY:
-SELECT d.name AS department_name, COUNT(e.id) AS employee_count 
-FROM departments d 
-JOIN employees e ON d.id = e.department_id 
-WHERE d.created_by = {company_id} 
-GROUP BY d.name 
+EXAMPLE QUERY (for department-employee count):
+SELECT d.name AS department_name, COUNT(e.id) AS employee_count
+FROM departments d
+JOIN employees e ON d.id = e.department_id
+WHERE d.created_by = {company_id}
+GROUP BY d.name
 ORDER BY employee_count DESC;"""),
             ("human", "Create a SQL query to answer this question: {question}")
         ])
@@ -267,6 +269,112 @@ ORDER BY employee_count DESC;"""),
                 else:
                     raise ValueError(f"Could not extract SQL query from LLM response: {result}")
     
+    def _parse_string_tuple_result(self, result_str: str) -> List[Dict[str, Any]]:
+        """
+        Robustly parse a string representation of a list of tuples,
+        e.g., "[('label1', Decimal('10.5')), ('label2', 20)]"
+        into a list of dicts, e.g., [{'label': 'label1', 'value': 10.5}, ...]
+        Handles Decimal objects by converting them to floats.
+        """
+        logger.info(f"Attempting to parse string tuple result: {result_str}")
+        parsed_results = []
+        
+        temp_str = result_str
+        # Order of replacement matters. First, more specific (quoted) then general.
+        # Replace Decimal('number_string') or Decimal("number_string") with 'number_string'
+        temp_str = re.sub(r"Decimal\((['\"])((?:\\\\\1|.)*?)\1\)", r"'\2'", temp_str)
+        # Replace Decimal(possibly_unquoted_number_or_string_literal) with 'content_as_string'
+        # This is a bit more aggressive if the content isn't already a string literal.
+        # It aims to capture the inner content and wrap it in single quotes for ast.literal_eval.
+        temp_str = re.sub(r"Decimal\(([^\)]+)\)", r"'\1'", temp_str)
+
+        logger.debug(f"String after Decimal replacement for ast.literal_eval: {temp_str}")
+
+        try:
+            # Ensure that any remaining non-string literals that should be strings are quoted
+            # e.g. if a label itself was %Y-%m without quotes, ast.literal_eval would fail.
+            # This is complex to do safely with regex for arbitrary structures.
+            # The primary goal here is to handle the Decimal values correctly.
+            
+            evaluated_data = ast.literal_eval(temp_str)
+            if isinstance(evaluated_data, list):
+                for item in evaluated_data:
+                    if isinstance(item, tuple) and len(item) >= 2:
+                        label = str(item[0])
+                        value_candidate = item[1]
+                        try:
+                            # The value might already be a number if original was not Decimal
+                            # or it's a string like '5000.00' after replacement.
+                            value = float(value_candidate)
+                        except (ValueError, TypeError, InvalidOperation):
+                            logger.warning(f"AST path: Could not convert value '{value_candidate}' to float for label '{label}'. Using 0.0.")
+                            value = 0.0
+                        parsed_results.append({"label": label, "value": value})
+                    elif isinstance(item, dict) and 'label' in item and 'value' in item: # If it's already dict
+                        parsed_results.append(item) # Assume already correctly typed
+
+                if parsed_results:
+                    logger.info(f"Successfully parsed tuple string using ast.literal_eval after Decimal replacement into {len(parsed_results)} items.")
+                    return parsed_results
+        except Exception as e_ast:
+            logger.warning(f"ast.literal_eval failed after Decimal replacement: {e_ast}. Original: '{result_str}', Processed: '{temp_str}'. Falling back to regex.")
+            parsed_results = [] # Reset for regex attempt
+
+        # Attempt 2: Regex-based parsing as a more robust fallback
+        # This regex tries to capture ('label_string', value_part)
+        # value_part can be Decimal('number_string'), Decimal(number_literal), or just a number_literal
+        # The previous regex was good, let's ensure it can handle labels like '%Y-%m'
+        tuple_pattern = re.compile(
+            r"\\(\\s*"                                      # Start of tuple
+            r"(['\"])((?:\\\\\\2|.)*?)\\2\\s*,\\s*"          # Group 2&3: Label string (e.g., '%Y-%m', handles escaped quotes within)
+            r"(?:"                                      # Non-capturing group for value alternatives
+            r"Decimal\\((['\"])((?:\\\\\\4|.)*?)\\4\\)"       # Alt 1: Decimal('number_string') - Group 5 is number_string
+            r"|"
+            r"Decimal\\(([^\'\")][^\\)]*)\\)"           # Alt 2: Decimal(number_literal_no_quotes) - Group 6 is number_literal
+            r"|"
+            r"(['\"]?)((?:[+-]?\\d*\\.?\\d+)|(?:(?:\\\\\\7|.)*?))\\7?" # Alt 3: A direct number or a general string, possibly quoted - Group 8 is value, Group 7 is quote
+            r")\\s*\\)"                                 # Closing parenthesis of the tuple
+        )
+
+        matches = tuple_pattern.findall(result_str) # Use original result_str for regex, not temp_str
+        logger.debug(f"Regex matches found: {len(matches)}")
+
+        for i, match in enumerate(matches):
+            logger.debug(f"Regex match {i}: {match}")
+            label = match[2]  # Content of the first quoted string (label)
+            
+            # Extract value based on which alternative matched
+            val_decimal_quoted = match[4]
+            val_decimal_unquoted = match[5]
+            val_direct = match[7] # This is group 8 from regex, adjusted for 0-indexed `match` tuple
+            
+            final_value_str = None
+            if val_decimal_quoted:
+                final_value_str = val_decimal_quoted
+            elif val_decimal_unquoted:
+                final_value_str = val_decimal_unquoted
+            elif val_direct:
+                final_value_str = val_direct
+
+            if label is not None and final_value_str is not None:
+                try:
+                    value = float(final_value_str)
+                    parsed_results.append({"label": str(label), "value": value})
+                except (ValueError, TypeError, InvalidOperation) as e:
+                    logger.warning(f"Regex parsing: Could not convert value '{final_value_str}' to float for label '{label}'. Error: {e}. Using 0.0.")
+                    parsed_results.append({"label": str(label), "value": 0.0})
+            else:
+                logger.warning(f"Regex parsing: Skipped a segment, label or value_str was None. Label: {label}, ValStr: {final_value_str}, Match: {match}")
+
+
+        if parsed_results:
+            logger.info(f"Successfully parsed tuple string using regex into {len(parsed_results)} items.")
+            return parsed_results
+        else:
+            logger.error(f"Failed to parse tuple string with all methods: {result_str}")
+            # To aid chart_agent, return an empty list rather than error dict if truly unparseable to prevent downstream errors
+            return [] # Ensure it's an empty list
+
     def execute_query(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute the SQL query and retrieve results.
@@ -294,48 +402,36 @@ ORDER BY employee_count DESC;"""),
             # Execute the query with company isolation
             result = db.run(sql_query)
             
-            if isinstance(result, str) and ('error' in result.lower() or 'exception' in result.lower()):
-                # Error in execution
-                logger.error(f"SQL execution error: {result}")
-                state['error'] = f"SQL error: {result}"
-                state['results'] = []
-                return state
-                
-            # Convert to list of dictionaries if it's not already
-            if isinstance(result, pd.DataFrame):
+            if isinstance(result, str):
+                logger.warning(f"SQL query returned a string result: {result}")
+                # Check if it's the specific problematic string format
+                if result.strip().startswith("[(") and result.strip().endswith(")]"):
+                    parsed_data = self._parse_string_tuple_result(result)
+                    if parsed_data and not (len(parsed_data) == 1 and "error" in parsed_data[0]):
+                        logger.info(f"Successfully parsed tuple string into {len(parsed_data)} items using _parse_string_tuple_result.")
+                        state['results'] = parsed_data
+                        state['columns'] = ['label', 'value'] if parsed_data else []
+                        state['data_type'] = 'key_value' if parsed_data else 'unknown'
+                        return state
+                    else:
+                        logger.error(f"Failed to parse string tuple result or error in parsing: {parsed_data}")
+                        # Fallback or error state
+                        state['results'] = [{"error": "Failed to parse SQL string result", "details": result}]
+                        state['columns'] = []
+                        state['data_type'] = 'error'
+                        state['error'] = "Failed to parse SQL string result."
+                        return state
+                else: # Generic string result, treat as single value or error
+                    logger.warning(f"SQL query returned a generic string, not a parseable tuple list: {result}")
+                    state['results'] = [{'result': result}]
+                    state['columns'] = ['result']
+                    state['data_type'] = 'string_value' # or 'error'
+                    # state['error'] = "SQL query returned an unhandled string." # Optional
+                    return state
+            elif isinstance(result, pd.DataFrame):
                 results = result.to_dict(orient='records')
             elif isinstance(result, list):
                 results = result
-            elif isinstance(result, str):
-                # Handle string results - often error messages or tuple representations
-                logger.warning(f"SQL query returned a string result: {result}")
-                
-                # Check if it looks like a tuple representation: [('IT', 2), ('Audit', 2)]
-                if result.startswith("[") and ")" in result and "," in result:
-                    try:
-                        # Try to parse it using ast.literal_eval
-                        import ast
-                        parsed_tuples = ast.literal_eval(result)
-                        
-                        # Convert to label/value pairs for visualization
-                        results = []
-                        for tup in parsed_tuples:
-                            if isinstance(tup, tuple) and len(tup) == 2:
-                                results.append({
-                                    "label": str(tup[0]),
-                                    "value": float(tup[1]) if isinstance(tup[1], (int, float)) else 0
-                                })
-                        
-                        # If we have successfully parsed results, log it
-                        if results:
-                            logger.info(f"Successfully parsed tuple string into {len(results)} label/value pairs")
-                    except Exception as parse_error:
-                        # If parsing fails, fall back to using the raw string
-                        logger.error(f"Failed to parse tuple string: {str(parse_error)}")
-                        results = [{'result': result}]
-                else:
-                    # Not a tuple representation, use as is
-                    results = [{'result': result}]
             else:
                 # Try to handle other return types
                 try:
