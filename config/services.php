@@ -48,4 +48,10 @@ return [
         'url' => 'https://sandbox.cashfree.com/pg/orders',
     ],
 
+    'ai_agent' => [
+        'url' => env('AI_AGENT_URL'),
+        'token_lifetime_minutes' => env('AI_AGENT_TOKEN_LIFETIME_MINUTES', 60 * 24 * 7), // Default 7 days = 10080 minutes
+        'internal_api_key' => env('AI_AGENT_INTERNAL_API_KEY'),
+    ],
+
 ];

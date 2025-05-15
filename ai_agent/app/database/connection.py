@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional, Callable, List, Tuple, Set
 from langchain_community.utilities.sql_database import SQLDatabase
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
+import sqlalchemy as sa
 
 from app.core.config import settings
 
@@ -31,7 +32,7 @@ db_session = scoped_session(SessionLocal)
 # Create base class for models
 Base = declarative_base()
 
-def get_db_session():
+def get_session():
     """Get database session.
     
     Yields:
@@ -449,6 +450,55 @@ class CompanyIsolationSQLDatabase(SQLDatabase):
         except Exception as e:
             logger.error(f"Error processing SQL query for company {self.company_id}: {str(e)}", exc_info=True)
             return f"Error executing SQL query: {str(e)}"
+
+    def get_detailed_schema_info(self) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Get detailed schema information for all tables, including column names, types, 
+        and primary/foreign keys.
+        
+        Returns:
+            Dictionary with table names as keys and lists of column information as values
+        """
+        if hasattr(self, '_detailed_schema_cache'):
+            return self._detailed_schema_cache
+            
+        try:
+            engine = self._engine
+            metadata = sa.MetaData()
+            metadata.reflect(bind=engine)
+            
+            schema_info = {}
+            
+            for table_name, table in metadata.tables.items():
+                table_info = []
+                
+                # Get all column details
+                for column in table.columns:
+                    col_info = {
+                        "name": column.name,
+                        "type": str(column.type),
+                        "nullable": column.nullable,
+                        "primary_key": column.primary_key,
+                    }
+                    
+                    # Check for foreign keys
+                    for fk in column.foreign_keys:
+                        col_info["foreign_key"] = {
+                            "references_table": fk.column.table.name,
+                            "references_column": fk.column.name
+                        }
+                        
+                    table_info.append(col_info)
+                
+                schema_info[table_name] = table_info
+            
+            # Cache the result
+            self._detailed_schema_cache = schema_info
+            return schema_info
+            
+        except Exception as e:
+            logger.error(f"Error getting detailed schema info: {str(e)}")
+            return {}
 
 def get_company_isolated_sql_database(company_id: int, **kwargs) -> SQLDatabase:
     """Get a CompanyIsolationSQLDatabase instance for the given company_id."""

@@ -7,7 +7,7 @@ import logging
 
 from app.agents.sql_agent import SQLAgent
 from app.agents.base_agent import AgentResponse
-from app.database.connection import DatabaseConnection, get_db_session
+from app.database.connection import DatabaseConnection
 from app.core.config import settings
 from app.schema.requests import ChatRequest
 
@@ -47,7 +47,7 @@ class VisualizationRequest(BaseModel):
 @router.post("/message", response_model=AgentResponse, tags=["Chat"])
 async def chat_endpoint(
     request: ChatRequest,
-    session: Session = Depends(get_db_session)
+    session: Session = Depends(get_db)
 ):
     """Handle incoming chat messages."""
     try:
@@ -192,7 +192,7 @@ class ConversationHistoryResponse(BaseModel):
 async def get_conversation_history_endpoint(
     conversation_id: str,
     company_id: int,  # Assuming company_id is needed for authorization/scoping
-    session: Session = Depends(get_db_session)
+    session: Session = Depends(get_db)
 ):
     """Retrieve the message history for a specific conversation."""
     try:

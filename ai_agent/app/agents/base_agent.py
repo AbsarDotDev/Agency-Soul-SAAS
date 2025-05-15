@@ -13,18 +13,54 @@ from app.core.llm import get_llm
 logger = logging.getLogger(__name__)
 
 class AgentResponse(BaseModel):
-    """Agent response model."""
-    response: str = Field(..., description="Agent's response message")
-    conversation_id: str = Field(..., description="Conversation ID")
-    conversation_title: Optional[str] = Field(None, description="Title generated for the conversation")
-    visualization: Optional[Dict[str, Any]] = Field(None, description="Optional visualization data")
-    tokens_remaining: Optional[int] = Field(None, description="Tokens remaining after this interaction")
-    tokens_used: Optional[int] = Field(None, description="Tokens consumed in this interaction")
+    """Standardized response format for agent-based systems."""
+    
+    response: str = Field(description="Text response from the agent")
+    conversation_id: str = Field(description="Conversation ID")
+    conversation_title: Optional[str] = Field(None, description="Conversation title")
+    tokens_used: int = Field(description="Number of tokens used in this interaction")
+    tokens_remaining: Optional[int] = Field(None, description="Number of tokens remaining")
+    visualization: Optional[Dict[str, Any]] = Field(None, description="Visualization data if available")
+    agent_type: Optional[str] = Field(None, description="Agent type that processed this request")
+    
+    class Config:
+        """Pydantic configuration for AgentResponse."""
+        
+        json_encoders = {
+            # Define custom JSON encoders if needed
+        }
+        
+        # Ensure model fields are properly serialized to JSON
+        json_schema_extra = {
+            "example": {
+                "response": "Here's your visualization of employees per department.",
+                "conversation_id": "12345-abcde",
+                "conversation_title": "Employee Department Analysis",
+                "tokens_used": 10,
+                "tokens_remaining": 990,
+                "visualization": {
+                    "chart_type": "pie",
+                    "title": "Employees per Department",
+                    "labels": ["HR", "IT", "Marketing"],
+                    "datasets": [
+                        {
+                            "label": "Count",
+                            "data": [5, 10, 7],
+                            "backgroundColor": ["rgba(255,99,132,0.7)", "rgba(54,162,235,0.7)", "rgba(255,206,86,0.7)"]
+                        }
+                    ],
+                    "options": {}
+                },
+                "agent_type": "visualization"
+            }
+        }
 
 class VisualizationResult(BaseModel):
     """Visualization result model."""
     data: Optional[Dict[str, Any]] = Field(None, description="Chart.js compatible data structure")
     explanation: Optional[str] = Field(None, description="Natural language explanation of the visualization")
+    query: str = Field(..., description="The original query that generated this visualization")
+    chart_type: str = Field("bar", description="The type of chart generated (bar, line, pie, etc.)")
     tokens_used: int = Field(2, description="Tokens consumed during the visualization generation step - fixed at 2 for simplicity")
 
 class ActionResult(BaseModel):
@@ -35,6 +71,11 @@ class ActionResult(BaseModel):
 
 class BaseAgent(ABC):
     """Base agent class with common functionality."""
+    
+    def __init__(self):
+        """Initialize base agent with LLM."""
+        self.llm = get_llm() # Initialize LLM once for all inheriting agents
+        # self.embedding_model = get_embedding_model() # Embedding model can be initialized if commonly needed by all base agents
     
     @abstractmethod
     async def process_message(
@@ -66,8 +107,9 @@ class BaseAgent(ABC):
         company_id: int, 
         user_id: str,
         visualization_type: Optional[str] = None,
-        session: Optional[Session] = None
-    ) -> VisualizationResult:
+        session: Optional[Session] = None,
+        conversation_id: Optional[str] = None
+    ) -> AgentResponse:
         """Generate visualization based on query.
         
         Args:
@@ -76,9 +118,10 @@ class BaseAgent(ABC):
             user_id: User ID
             visualization_type: Optional visualization type (bar, line, pie, etc.)
             session: Optional database session
+            conversation_id: Optional conversation ID
             
         Returns:
-            Visualization result
+            Agent response with visualization data
         """
         pass
     
@@ -152,7 +195,7 @@ class BaseAgent(ABC):
                 
                 if first_message_check is None: # It's the first message
                     try:
-                        llm = get_llm() # Get LLM instance
+                        # llm = get_llm() # Use self.llm
                         prompt = f"""Generate a concise and informative title (around 5-7 words) that summarizes the main topic of the following conversation excerpt.
 Focus on the user's primary question or goal. Avoid generic phrases.
 If the user's message is very short or a generic greeting, use the agent's response to help infer a topic.
@@ -161,7 +204,7 @@ User's first message: "{message}"
 Agent's first response: "{response}"
 
 Suggested Title:"""
-                        title_response = await llm.ainvoke(prompt)
+                        title_response = await self.llm.ainvoke(prompt) # Use self.llm
                         generated_title = title_response.content.strip()
                         
                         # Further cleaning: remove potential quotes, list markers, or "Title:" prefixes
@@ -370,3 +413,20 @@ Suggested Title:"""
             logger.error(f"Error updating token usage: {str(e)}")
             session.rollback()
             return False
+
+    async def _get_llm_response(self, user_prompt: str, system_prompt: Optional[str] = None) -> str:
+        """Get response from the configured LLM using stored instance."""
+        messages = []
+        if system_prompt:
+            messages.append(SystemMessage(content=system_prompt))
+        messages.append(HumanMessage(content=user_prompt))
+        
+        try:
+            logger.debug(f"Sending messages to LLM: {messages}")
+            response = await self.llm.ainvoke(messages)
+            logger.debug(f"Received LLM response: {response.content}")
+            return response.content.strip()
+        except Exception as e:
+            logger.error(f"Error getting LLM response: {str(e)}", exc_info=True)
+            # Return a generic error message or raise a custom exception
+            return "I apologize, but I encountered an error trying to process your request."

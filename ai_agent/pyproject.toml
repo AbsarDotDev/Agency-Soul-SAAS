@@ -29,6 +29,8 @@ pandas = "*"
 numpy = "*"
 httpx = "*"
 requests = "*"
+python-jose = "*"
+passlib = "*"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

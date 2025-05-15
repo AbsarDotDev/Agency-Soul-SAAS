@@ -1,0 +1,7 @@
+INFO:     Will watch for changes in these directories: ['/Applications/XAMPP/xamppfiles/htdocs/nomessos']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [34474] using StatReload
+ERROR:    Error loading ASGI app. Could not import module "main".
+WARNING:  StatReload detected changes in 'ai_agent/app/agents/visualization_agent.py'. Reloading...
+ERROR:    Error loading ASGI app. Could not import module "main".
+INFO:     Stopping reloader process [34474]
